@@ -1,0 +1,21 @@
+version: '3.8'
+services:
+  app:
+    image: ghcr.io/marc-cizeron/marketwatcher:latest
+    ports:
+      - "4567:4567"
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ANALYSIS_DAY=${ANALYSIS_DAY:-1}
+      - ANALYSIS_HOUR=${ANALYSIS_HOUR:-7}
+      - SECTORS=${SECTORS:-energie,tech,defense,industrie,alimentation}
+      - DEFAULT_BUDGET=${DEFAULT_BUDGET:-50}
+      - APP_SECRET=${APP_SECRET}
+      - TRIGGER_TOKEN=${TRIGGER_TOKEN}
+      - PORT=4567
+    volumes:
+      - marketwatch_db:/app/db
+    restart: unless-stopped
+
+volumes:
+  marketwatch_db:

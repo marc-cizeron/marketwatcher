@@ -1,0 +1,34 @@
+<h1>Paris court terme</h1>
+
+<div class="card">
+  <table>
+    <tr><th>Mois</th><th>Ticker</th><th>Statut</th><th>Entrée</th><th>Sortie</th><th>P&L</th><th>Actions</th></tr>
+    <% @bets.each do |b| %>
+      <tr>
+        <td><%= b.month %></td>
+        <td><strong><%= b.ticker %></strong><br><small class="neutral"><%= b.name %></small></td>
+        <td><span class="badge badge-<%= {'pending'=>'yellow','open'=>'green','closed'=>b.pct_change.to_f>=0 ? 'green' : 'red','skipped'=>'gray'}[b.status] || 'gray' %>"><%= b.status %></span></td>
+        <td><%= b.entry_price ? "#{b.entry_price}€" : '—' %></td>
+        <td><%= b.exit_price  ? "#{b.exit_price}€"  : '—' %></td>
+        <td class="<%= b.pct_change ? (b.pct_change >= 0 ? 'positive' : 'negative') : 'neutral' %>">
+          <%= b.pct_change ? "#{b.pct_change >= 0 ? '+' : ''}#{b.pct_change}% (#{b.gain_eur}€)" : '—' %>
+        </td>
+        <td>
+          <% if b.status == 'pending' %>
+            <form method="post" action="/bets/<%= b.id %>/open" style="display:inline">
+              <input name="entry_price" placeholder="Prix" style="width:70px;display:inline" required>
+              <input name="entry_date" type="date" value="<%= Date.today %>" style="width:120px;display:inline" required>
+              <button class="btn btn-primary btn-sm" type="submit">Ouvrir</button>
+            </form>
+          <% elsif b.status == 'open' %>
+            <form method="post" action="/bets/<%= b.id %>/close" style="display:inline">
+              <input name="exit_price" placeholder="Prix" style="width:70px;display:inline" required>
+              <input name="exit_date" type="date" value="<%= Date.today %>" style="width:120px;display:inline" required>
+              <button class="btn btn-primary btn-sm" type="submit">Clôturer</button>
+            </form>
+          <% end %>
+        </td>
+      </tr>
+    <% end %>
+  </table>
+</div>

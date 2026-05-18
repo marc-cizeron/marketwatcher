@@ -1,0 +1,24 @@
+<h1>Radar long terme</h1>
+
+<div class="card">
+  <table>
+    <tr><th>Ticker</th><th>Secteur</th><th>Horizon</th><th>Thèse</th><th>Statut</th><th>Source</th><th>Action</th></tr>
+    <% @items.each do |w| %>
+      <tr>
+        <td><strong><%= w.ticker %></strong><br><small class="neutral"><%= w.name %></small></td>
+        <td><%= w.sector %></td>
+        <td><%= w.horizon %></td>
+        <td style="max-width:350px;font-size:0.8rem"><%= w.thesis %></td>
+        <td><span class="badge badge-<%= {'watching'=>'blue','entered'=>'green','passed'=>'gray'}[w.status] %>"><%= w.status %></span></td>
+        <td><%= w.source_month %></td>
+        <td>
+          <% if w.status == 'watching' %>
+            <form method="post" action="/watchlist/<%= w.id %>/enter">
+              <button class="btn btn-primary btn-sm" type="submit">Entré</button>
+            </form>
+          <% end %>
+        </td>
+      </tr>
+    <% end %>
+  </table>
+</div>

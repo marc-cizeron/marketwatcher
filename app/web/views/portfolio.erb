@@ -1,0 +1,59 @@
+<h1>Portefeuille long terme</h1>
+
+<div class="card">
+  <h2>Ajouter une position</h2>
+  <form method="post" action="/portfolio">
+    <div class="grid grid-3">
+      <div><label>Ticker</label><input name="ticker" required></div>
+      <div><label>Nom</label><input name="name" required></div>
+      <div><label>Exchange</label><input name="exchange" required></div>
+      <div><label>Secteur</label>
+        <select name="sector">
+          <% ['energie','tech','defense','industrie','alimentation','autre'].each do |s| %>
+            <option><%= s %></option>
+          <% end %>
+        </select>
+      </div>
+      <div><label>Horizon</label>
+        <select name="horizon">
+          <option value="long">Long terme</option>
+          <option value="medium">Moyen terme</option>
+        </select>
+      </div>
+      <div><label>Conviction</label>
+        <select name="conviction">
+          <option>haute</option><option>moyenne</option><option>faible</option>
+        </select>
+      </div>
+      <div><label>Prix moyen (€)</label><input name="avg_price" type="number" step="0.01" required></div>
+      <div><label>Prix actuel (€)</label><input name="current_price" type="number" step="0.01"></div>
+      <div><label>Nombre d'actions</label><input name="shares" type="number" step="0.0001" required></div>
+    </div>
+    <div style="margin-top:1rem"><label>Notes</label><textarea name="notes" rows="2"></textarea></div>
+    <button class="btn btn-primary" style="margin-top:1rem" type="submit">Ajouter</button>
+  </form>
+</div>
+
+<div class="card">
+  <table>
+    <tr><th>Ticker</th><th>Secteur</th><th>Horizon</th><th>Valeur</th><th>P&L</th><th>Conviction</th><th>Prix actuel</th></tr>
+    <% @positions.each do |p| %>
+      <tr>
+        <td><strong><%= p.ticker %></strong><br><small class="neutral"><%= p.name %></small></td>
+        <td><%= p.sector %></td>
+        <td><%= p.horizon %></td>
+        <td><%= p.market_value ? "#{p.market_value}€" : '—' %></td>
+        <td class="<%= p.pnl_pct ? (p.pnl_pct >= 0 ? 'positive' : 'negative') : 'neutral' %>">
+          <%= p.pnl_pct ? "#{p.pnl_pct >= 0 ? '+' : ''}#{p.pnl_pct}% (#{p.pnl_eur}€)" : '—' %>
+        </td>
+        <td><span class="badge badge-<%= p.conviction == 'haute' ? 'green' : p.conviction == 'moyenne' ? 'blue' : 'gray' %>"><%= p.conviction %></span></td>
+        <td>
+          <form method="post" action="/portfolio/<%= p.id %>" style="display:inline">
+            <input name="current_price" type="number" step="0.01" value="<%= p.current_price %>" style="width:80px;display:inline">
+            <button class="btn btn-primary btn-sm" type="submit">MAJ</button>
+          </form>
+        </td>
+      </tr>
+    <% end %>
+  </table>
+</div>

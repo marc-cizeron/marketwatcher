@@ -1,0 +1,74 @@
+<h1>Dashboard</h1>
+
+<% if @analysis %>
+  <div class="card">
+    <h2>Analyse <%= @analysis.month %></h2>
+    <p class="macro"><%= @analysis.macro %></p>
+  </div>
+<% else %>
+  <div class="card">
+    <p class="neutral">Aucune analyse disponible. Déclenchez une analyse via <code>rake analysis:run</code>.</p>
+  </div>
+<% end %>
+
+<div class="grid grid-2">
+  <div class="card">
+    <h2>Pari en cours</h2>
+    <% if @current_bet %>
+      <p><strong><%= @current_bet.ticker %></strong> — <%= @current_bet.name %></p>
+      <p class="macro" style="margin-top:0.5rem"><%= @current_bet.thesis %></p>
+      <% if @current_bet.entry_price %>
+        <p style="margin-top:0.75rem">Entrée : <%= @current_bet.entry_price %> € — Jours restants : <strong><%= @current_bet.days_remaining %></strong></p>
+      <% else %>
+        <p style="margin-top:0.75rem" class="neutral">En attente d'entrée</p>
+      <% end %>
+      <p style="margin-top:0.5rem">
+        <span class="badge badge-<%= @current_bet.status == 'open' ? 'green' : 'yellow' %>"><%= @current_bet.status %></span>
+      </p>
+    <% else %>
+      <p class="neutral">Aucun pari actif.</p>
+    <% end %>
+  </div>
+
+  <div class="card">
+    <h2>Performance historique</h2>
+    <% closed = @recent_bets.select { |b| b.status == 'closed' }
+       wins = closed.count { |b| b.pct_change && b.pct_change > 0 }
+       total_gain = closed.sum { |b| b.gain_eur || 0 }
+    %>
+    <div class="grid grid-3">
+      <div class="stat">
+        <div class="stat-value"><%= closed.size > 0 ? "#{(wins.to_f / closed.size * 100).round(0)}%" : '—' %></div>
+        <div class="stat-label">Taux réussite</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value <%= total_gain >= 0 ? 'positive' : 'negative' %>"><%= total_gain >= 0 ? '+' : '' %><%= total_gain.round(2) %>€</div>
+        <div class="stat-label">Gain cumulé fictif</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value"><%= closed.size %></div>
+        <div class="stat-label">Paris clôturés</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<% if @positions.any? %>
+  <div class="card">
+    <h2>Portefeuille</h2>
+    <table>
+      <tr><th>Ticker</th><th>Nom</th><th>Secteur</th><th>P&L</th><th>Conviction</th></tr>
+      <% @positions.each do |p| %>
+        <tr>
+          <td><strong><%= p.ticker %></strong></td>
+          <td><%= p.name %></td>
+          <td><%= p.sector %></td>
+          <td class="<%= p.pnl_pct ? (p.pnl_pct >= 0 ? 'positive' : 'negative') : 'neutral' %>">
+            <%= p.pnl_pct ? "#{p.pnl_pct >= 0 ? '+' : ''}#{p.pnl_pct}%" : '—' %>
+          </td>
+          <td><span class="badge badge-<%= p.conviction == 'haute' ? 'green' : p.conviction == 'moyenne' ? 'blue' : 'gray' %>"><%= p.conviction %></span></td>
+        </tr>
+      <% end %>
+    </table>
+  </div>
+<% end %>

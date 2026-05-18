@@ -1,0 +1,7 @@
+.env
+db/marketwatch.db
+*.db
+.bundle/
+vendor/
+.DS_Store
+.claude/

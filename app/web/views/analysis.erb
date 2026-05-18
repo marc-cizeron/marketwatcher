@@ -1,0 +1,36 @@
+<h1>Analyse <%= @analysis.month %></h1>
+
+<div class="card">
+  <h2>Contexte macro</h2>
+  <p class="macro"><%= @analysis.macro %></p>
+</div>
+
+<div class="card">
+  <h2>Candidats</h2>
+  <table>
+    <tr><th>Ticker</th><th>Nom</th><th>Signal</th><th>Conviction</th><th>Thèse</th></tr>
+    <% @analysis.candidates_parsed.each do |c| %>
+      <tr>
+        <td><strong><%= c['ticker'] %></strong></td>
+        <td><%= c['name'] %></td>
+        <td><span class="badge badge-blue"><%= c['signal'] %></span></td>
+        <td><span class="badge badge-<%= c['conviction'] == 'haute' ? 'green' : c['conviction'] == 'moyenne' ? 'blue' : 'gray' %>"><%= c['conviction'] %></span></td>
+        <td style="max-width:400px;font-size:0.8rem"><%= c['thesis'] %></td>
+      </tr>
+    <% end %>
+  </table>
+</div>
+
+<% if @analysis.radar_parsed.any? %>
+  <div class="card">
+    <h2>Radar long terme</h2>
+    <% @analysis.radar_parsed.each do |r| %>
+      <div style="margin-bottom:1rem; padding-bottom:1rem; border-bottom:1px solid #334155">
+        <strong><%= r['ticker'] %></strong> — <%= r['name'] %>
+        <span class="badge badge-blue" style="margin-left:0.5rem"><%= r['sector'] %></span>
+        <p style="margin-top:0.5rem;font-size:0.875rem"><%= r['thesis_long'] %></p>
+        <p style="margin-top:0.25rem;font-size:0.8rem;color:#64748b">Stratégie : <%= r['entry_strategy'] %> — Horizon : <%= r['horizon'] %></p>
+      </div>
+    <% end %>
+  </div>
+<% end %>

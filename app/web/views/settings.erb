@@ -1,0 +1,24 @@
+<h1>Configuration</h1>
+<div class="card">
+  <h2>Variables d'environnement actives</h2>
+  <table>
+    <tr><th>Variable</th><th>Valeur</th></tr>
+    <tr><td>ANTHROPIC_API_KEY</td><td><%= Settings::ANTHROPIC_API_KEY.empty? ? '❌ Non définie' : '✅ Définie' %></td></tr>
+    <tr><td>ANALYSIS_DAY</td><td><%= Settings::ANALYSIS_DAY %></td></tr>
+    <tr><td>ANALYSIS_HOUR</td><td><%= Settings::ANALYSIS_HOUR %>h00</td></tr>
+    <tr><td>SECTORS</td><td><%= Settings::SECTORS.join(', ') %></td></tr>
+    <tr><td>DEFAULT_BUDGET</td><td><%= Settings::DEFAULT_BUDGET %>€</td></tr>
+    <tr><td>PORT</td><td><%= Settings::PORT %></td></tr>
+    <tr><td>USER_CONTEXT</td><td><%= Settings::USER_CONTEXT %></td></tr>
+  </table>
+  <p style="margin-top:1rem;font-size:0.8rem;color:#64748b">Modifiez les variables dans votre fichier <code>.env</code> puis redémarrez l'application.</p>
+</div>
+
+<div class="card">
+  <h2>Déclencher une analyse manuelle</h2>
+  <form method="post" action="/trigger">
+    <label>Token d'authentification</label>
+    <input name="token" type="password" placeholder="TRIGGER_TOKEN">
+    <button class="btn btn-primary" style="margin-top:1rem" type="submit">Lancer l'analyse</button>
+  </form>
+</div>

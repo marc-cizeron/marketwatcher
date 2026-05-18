@@ -1,0 +1,23 @@
+version: '3.8'
+services:
+  app:
+    build: .
+    ports:
+      - "4567:4567"
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - ANALYSIS_DAY=${ANALYSIS_DAY:-1}
+      - ANALYSIS_HOUR=${ANALYSIS_HOUR:-7}
+      - SECTORS=${SECTORS:-energie,tech,defense,industrie,alimentation}
+      - DEFAULT_BUDGET=${DEFAULT_BUDGET:-50}
+      - APP_SECRET=${APP_SECRET:-dev_secret}
+      - TRIGGER_TOKEN=${TRIGGER_TOKEN:-dev_token}
+      - PORT=4567
+      - DATABASE_PATH=db/marketwatch.db
+    volumes:
+      - .:/app                      # source live-reload
+      - marketwatch_db:/app/db      # SQLite persist
+    restart: unless-stopped
+
+volumes:
+  marketwatch_db:
