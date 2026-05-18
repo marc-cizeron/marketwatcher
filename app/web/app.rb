@@ -2,6 +2,7 @@ require 'sinatra/base'
 require 'sinatra/reloader'
 require 'json'
 require 'digest'
+require 'cgi'
 require_relative '../../config/settings'
 require_relative '../../app/models/analysis'
 require_relative '../../app/models/bet'
@@ -110,7 +111,8 @@ class MarketwatchApp < Sinatra::Base
   post '/portfolio/sync' do
     require_relative '../../app/services/sure_sync'
     results = SureSync.new.sync!
-    redirect "/portfolio?notice=#{results[:created]}+créées,+#{results[:updated]}+mises+à+jour"
+    notice = CGI.escape("#{results[:created]} créées, #{results[:updated]} mises à jour")
+    redirect "/portfolio?notice=#{notice}"
   rescue => e
     halt 500, "Erreur sync Sure : #{e.message}"
   end
