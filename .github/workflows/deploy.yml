@@ -53,10 +53,8 @@ jobs:
 
           echo "Stack ID=$STACK_ID  EndpointID=$ENDPOINT_ID"
 
-          # Récupère le contenu actuel du docker-compose stocké dans Portainer
-          STACK_FILE=$(curl -sf \
-            -H "X-API-Key: $PORTAINER_TOKEN" \
-            "$PORTAINER_URL/api/stacks/$STACK_ID/file" | jq -r '.StackFileContent')
+          # Utilise le docker-compose.yml du dépôt (toujours à jour)
+          STACK_FILE=$(cat docker-compose.yml)
 
           # Redéploie en préservant les variables d'environnement Portainer
           curl -sf -X PUT \
