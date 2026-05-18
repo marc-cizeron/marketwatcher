@@ -12,6 +12,12 @@ module Settings
   APP_PASSWORD      = ENV.fetch('APP_PASSWORD', '') unless defined?(APP_PASSWORD)
   SURE_API_URL      = ENV.fetch('SURE_API_URL', 'https://sur.cizeron.me') unless defined?(SURE_API_URL)
   SURE_API_KEY      = ENV.fetch('SURE_API_KEY', '') unless defined?(SURE_API_KEY)
+
+  SMTP_HOST         = ENV.fetch('SMTP_HOST', '') unless defined?(SMTP_HOST)
+  SMTP_PORT         = ENV.fetch('SMTP_PORT', '587').to_i unless defined?(SMTP_PORT)
+  SMTP_USER         = ENV.fetch('SMTP_USER', '') unless defined?(SMTP_USER)
+  SMTP_PASS         = ENV.fetch('SMTP_PASS', '') unless defined?(SMTP_PASS)
+  NOTIFY_EMAIL      = ENV.fetch('NOTIFY_EMAIL', '') unless defined?(NOTIFY_EMAIL)
   PORT              = ENV.fetch('PORT', '4567').to_i unless defined?(PORT)
   DATABASE_PATH     = ENV.fetch('DATABASE_PATH', 'db/marketwatch.db') unless defined?(DATABASE_PATH)
 

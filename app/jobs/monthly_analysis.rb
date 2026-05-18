@@ -6,6 +6,7 @@ require_relative '../../app/models/bet'
 require_relative '../../app/models/position'
 require_relative '../../app/models/watchlist'
 require_relative '../../app/agent/analyzer'
+require_relative '../../app/services/mailer'
 
 class MonthlyAnalysisJob
   def self.run!
@@ -83,5 +84,15 @@ class MonthlyAnalysisJob
 
       @logger.info("Analysis #{month} saved. Bet: #{recommended&.dig('ticker')}. Radar: #{result[:radar].map { |r| r['ticker'] }.join(', ')}")
     end
+
+    Mailer.notify_analysis(
+      month:      month,
+      bet_ticker: result[:recommendation],
+      candidates: result[:candidates],
+      macro:      result[:macro]
+    )
+    @logger.info("Notification email sent to #{Settings::NOTIFY_EMAIL}")
+  rescue => e
+    @logger.warn("Email notification failed: #{e.message}")
   end
 end

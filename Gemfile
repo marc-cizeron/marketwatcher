@@ -18,6 +18,7 @@ gem 'clockwork'
 gem 'json'
 gem 'dotenv'
 gem 'logger'
+gem 'mail'
 
 group :development, :test do
   gem 'rspec'
