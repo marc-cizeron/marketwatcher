@@ -16,6 +16,9 @@ class MarketwatchApp < Sinatra::Base
   set :views,         File.join(File.dirname(__FILE__), 'views')
   set :public_folder, File.join(File.dirname(__FILE__), '../../public')
 
+  permitted = ENV.fetch('PERMITTED_HOSTS', '').split(',').map(&:strip).reject(&:empty?)
+  set :host_authorization, { permitted_hosts: permitted } unless permitted.empty?
+
   get '/' do
     @analysis    = Analysis.order(Sequel.desc(:created_at)).first
     @current_bet = Bet.where(status: %w[pending open]).order(Sequel.desc(:created_at)).first
