@@ -1,6 +1,7 @@
 require 'sinatra/base'
 require 'sinatra/reloader'
 require 'json'
+require 'digest'
 require_relative '../../config/settings'
 require_relative '../../app/models/analysis'
 require_relative '../../app/models/bet'
@@ -21,7 +22,7 @@ class MarketwatchApp < Sinatra::Base
 
   use Rack::Session::Cookie,
       key:    'mw_session',
-      secret: Settings::APP_SECRET,
+      secret: Digest::SHA512.hexdigest(Settings::APP_SECRET),
       expire_after: 60 * 60 * 24 * 30
 
   before do
