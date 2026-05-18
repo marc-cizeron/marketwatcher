@@ -14,6 +14,8 @@ services:
       - APP_SECRET=${APP_SECRET}
       - TRIGGER_TOKEN=${TRIGGER_TOKEN}
       - APP_PASSWORD=${APP_PASSWORD}
+      - SURE_API_URL=${SURE_API_URL:-https://sur.cizeron.me}
+      - SURE_API_KEY=${SURE_API_KEY:-}
       - PERMITTED_HOSTS=${PERMITTED_HOSTS:-marketwatcher.cizeron.me}
       - PORT=4567
     volumes:

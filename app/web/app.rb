@@ -107,6 +107,14 @@ class MarketwatchApp < Sinatra::Base
     redirect '/portfolio'
   end
 
+  post '/portfolio/sync' do
+    require_relative '../../app/services/sure_sync'
+    results = SureSync.new.sync!
+    redirect "/portfolio?notice=#{results[:created]}+créées,+#{results[:updated]}+mises+à+jour"
+  rescue => e
+    halt 500, "Erreur sync Sure : #{e.message}"
+  end
+
   post '/portfolio/:id' do
     pos = Position.find(id: params[:id].to_i)
     halt 404 unless pos
