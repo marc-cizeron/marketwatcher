@@ -74,18 +74,29 @@ class SureSync
   end
 
   def group_by_ticker(holdings)
-    grouped = {}
+    # Sure retourne des snapshots journaliers — on garde uniquement
+    # le plus récent par (ticker, account) avant d'agréger.
+    latest = {}
     holdings.each do |h|
-      ticker = h.dig('security', 'ticker')
-      next if ticker.nil? || ticker.strip.empty?
+      ticker     = h.dig('security', 'ticker')
+      account_id = h.dig('account', 'id')
+      date       = h['date']
+      next if ticker.nil? || ticker.strip.empty? || date.nil?
 
+      key = [ticker, account_id]
+      latest[key] = h if !latest[key] || date > latest[key]['date']
+    end
+
+    grouped = {}
+    latest.each_value do |h|
+      ticker        = h.dig('security', 'ticker')
       qty           = h['qty'].to_f
       avg_cost      = parse_money(h['avg_cost']) || parse_money(h['price']) || 0.0
       current_price = parse_money(h['price']) || 0.0
 
       if grouped.key?(ticker)
-        e           = grouped[ticker]
-        total       = e[:shares] + qty
+        e     = grouped[ticker]
+        total = e[:shares] + qty
         e[:avg_price]     = total > 0 ? ((e[:avg_price] * e[:shares]) + (avg_cost * qty)) / total : 0.0
         e[:shares]        = total
         e[:current_price] = current_price
