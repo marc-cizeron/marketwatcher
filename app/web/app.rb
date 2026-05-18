@@ -115,12 +115,6 @@ class MarketwatchApp < Sinatra::Base
     halt 500, "Erreur sync Sure : #{e.message}"
   end
 
-  post '/portfolio/:id' do
-    pos = Position.find(id: params[:id].to_i)
-    halt 404 unless pos
-    pos.update(current_price: params[:current_price].to_f, updated_at: Time.now)
-    redirect '/portfolio'
-  end
 
   get '/watchlist' do
     @items = Watchlist.order(:status, :ticker).all

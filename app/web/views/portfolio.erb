@@ -57,12 +57,7 @@
           <%= p.pnl_pct ? "#{p.pnl_pct >= 0 ? '+' : ''}#{p.pnl_pct}% (#{p.pnl_eur}€)" : '—' %>
         </td>
         <td><span class="badge badge-<%= p.conviction == 'haute' ? 'green' : p.conviction == 'moyenne' ? 'blue' : 'gray' %>"><%= p.conviction %></span></td>
-        <td>
-          <form method="post" action="/portfolio/<%= p.id %>" style="display:inline">
-            <input name="current_price" type="number" step="0.01" value="<%= p.current_price %>" style="width:80px;display:inline">
-            <button class="btn btn-primary btn-sm" type="submit">MAJ</button>
-          </form>
-        </td>
+        <td class="neutral"><%= p.current_price ? "#{p.current_price}€" : '—' %></td>
       </tr>
     <% end %>
   </table>
