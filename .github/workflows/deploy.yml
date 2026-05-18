@@ -31,6 +31,35 @@ jobs:
           context: .
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          build-args: BUNDLE_WITHOUT=development:test
 
-      - name: Deploy via Portainer webhook
-        run: curl -X POST "${{ secrets.PORTAINER_WEBHOOK_URL }}"
+      - name: Deploy via Portainer API
+        env:
+          PORTAINER_URL: ${{ secrets.PORTAINER_URL }}
+          PORTAINER_TOKEN: ${{ secrets.PORTAINER_TOKEN }}
+          STACK_NAME: marketwatcher
+        run: |
+          # Récupère l'ID et l'endpointId du stack
+          STACKS=$(curl -sf -H "X-API-Key: $PORTAINER_TOKEN" "$PORTAINER_URL/api/stacks")
+          STACK_ID=$(echo "$STACKS" | jq -r '.[] | select(.Name == "'"$STACK_NAME"'") | .Id')
+          ENDPOINT_ID=$(echo "$STACKS" | jq -r '.[] | select(.Name == "'"$STACK_NAME"'") | .EndpointId')
+
+          if [ -z "$STACK_ID" ]; then
+            echo "Stack '$STACK_NAME' introuvable dans Portainer."
+            exit 1
+          fi
+
+          echo "Stack ID=$STACK_ID  EndpointID=$ENDPOINT_ID"
+
+          # Récupère le contenu actuel du docker-compose stocké dans Portainer
+          STACK_FILE=$(curl -sf \
+            -H "X-API-Key: $PORTAINER_TOKEN" \
+            "$PORTAINER_URL/api/stacks/$STACK_ID/file" | jq -r '.StackFileContent')
+
+          # Redéploie avec pullImage: true pour forcer le pull de la nouvelle image
+          curl -sf -X PUT \
+            -H "X-API-Key: $PORTAINER_TOKEN" \
+            -H "Content-Type: application/json" \
+            "$PORTAINER_URL/api/stacks/$STACK_ID?endpointId=$ENDPOINT_ID" \
+            -d "{\"stackFileContent\": $(echo "$STACK_FILE" | jq -Rs .), \"pullImage\": true, \"prune\": false}" \
+            | jq -r '"Status: " + (.Status | tostring)'
