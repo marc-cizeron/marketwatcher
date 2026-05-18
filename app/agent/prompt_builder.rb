@@ -13,15 +13,24 @@ module Agent
 
     def short_term_prompt
       existing = @portfolio.map { |p| p[:ticker] || p['ticker'] }.join(', ')
+      total_value = @portfolio.sum { |p| (p[:market_value] || p['market_value'] || 0).to_f }
+      sector_alloc = @portfolio.group_by { |p| p[:sector] || p['sector'] }.map do |sector, positions|
+        value = positions.sum { |p| (p[:market_value] || p['market_value'] || 0).to_f }
+        pct   = total_value > 0 ? (value / total_value * 100).round(1) : 0
+        "#{sector}: #{pct}% (#{value.round(0)}€)"
+      end.join(', ')
+
       <<~PROMPT
         Tu es un analyste financier senior spécialisé en actions internationales. Date d'aujourd'hui : #{@date}.
 
-        Portefeuille existant (à ne pas recommander en pari court terme) :
+        Contexte utilisateur : #{@user_context}
+
+        Portefeuille actuel (valeur totale : #{total_value.round(0)}€) :
         #{JSON.pretty_generate(@portfolio)}
 
-        Secteurs d'intérêt : #{@sectors.join(', ')}
+        Allocation par secteur : #{sector_alloc.empty? ? 'portefeuille vide' : sector_alloc}
 
-        Contexte utilisateur : #{@user_context}
+        Secteurs d'intérêt : #{@sectors.join(', ')}
 
         Utilise la recherche web pour analyser l'actualité boursière récente (7 derniers jours).
         Identifie 5 actions cotées (NYSE, NASDAQ, Euronext) avec potentiel haussier sur 30 jours.
@@ -30,7 +39,9 @@ module Agent
         - Catalyseur identifiable (résultats, contrat, réglementation, macro)
         - Momentum technique ou rebond sur support
         - Liquidité suffisante (volume journalier > 500k)
-        - Exclure : #{existing.empty? ? 'aucun' : existing}
+        - Préférer les secteurs sous-représentés dans le portefeuille existant
+        - Tenir compte des P&L latents pour évaluer le profil de risque global
+        - Exclure (déjà en portefeuille) : #{existing.empty? ? 'aucun' : existing}
 
         Réponds UNIQUEMENT en JSON strict, sans markdown, sans commentaire :
         {

@@ -22,7 +22,18 @@ class MonthlyAnalysisJob
     end
 
     portfolio = Position.all.map do |p|
-      { ticker: p.ticker, name: p.name, sector: p.sector, conviction: p.conviction }
+      {
+        ticker:       p.ticker,
+        name:         p.name,
+        sector:       p.sector,
+        conviction:   p.conviction,
+        shares:       p.shares,
+        avg_price:    p.avg_price,
+        current_price: p.current_price,
+        market_value: p.market_value,
+        pnl_pct:      p.pnl_pct,
+        pnl_eur:      p.pnl_eur
+      }
     end
 
     watchlist = Watchlist.where(status: 'watching').map do |w|
