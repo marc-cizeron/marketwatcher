@@ -39,12 +39,14 @@ jobs:
           PORTAINER_TOKEN: ${{ secrets.PORTAINER_TOKEN }}
           STACK_NAME: marketwatcher
         run: |
-          # Récupère l'ID et l'endpointId du stack
+          # Récupère l'ID, l'endpointId et les variables d'environnement du stack
           STACKS=$(curl -sf -H "X-API-Key: $PORTAINER_TOKEN" "$PORTAINER_URL/api/stacks")
-          STACK_ID=$(echo "$STACKS" | jq -r '.[] | select(.Name == "'"$STACK_NAME"'") | .Id')
-          ENDPOINT_ID=$(echo "$STACKS" | jq -r '.[] | select(.Name == "'"$STACK_NAME"'") | .EndpointId')
+          STACK=$(echo "$STACKS" | jq '.[] | select(.Name == "'"$STACK_NAME"'")')
+          STACK_ID=$(echo "$STACK" | jq -r '.Id')
+          ENDPOINT_ID=$(echo "$STACK" | jq -r '.EndpointId')
+          STACK_ENV=$(echo "$STACK" | jq '.Env // []')
 
-          if [ -z "$STACK_ID" ]; then
+          if [ -z "$STACK_ID" ] || [ "$STACK_ID" = "null" ]; then
             echo "Stack '$STACK_NAME' introuvable dans Portainer."
             exit 1
           fi
@@ -56,10 +58,10 @@ jobs:
             -H "X-API-Key: $PORTAINER_TOKEN" \
             "$PORTAINER_URL/api/stacks/$STACK_ID/file" | jq -r '.StackFileContent')
 
-          # Redéploie avec pullImage: true pour forcer le pull de la nouvelle image
+          # Redéploie en préservant les variables d'environnement Portainer
           curl -sf -X PUT \
             -H "X-API-Key: $PORTAINER_TOKEN" \
             -H "Content-Type: application/json" \
             "$PORTAINER_URL/api/stacks/$STACK_ID?endpointId=$ENDPOINT_ID" \
-            -d "{\"stackFileContent\": $(echo "$STACK_FILE" | jq -Rs .), \"pullImage\": true, \"prune\": false}" \
+            -d "{\"stackFileContent\": $(echo "$STACK_FILE" | jq -Rs .), \"env\": $STACK_ENV, \"pullImage\": true, \"prune\": false}" \
             | jq -r '"Status: " + (.Status | tostring)'
