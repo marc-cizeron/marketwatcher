@@ -9,6 +9,7 @@ module Settings
   DEFAULT_BUDGET    = ENV.fetch('DEFAULT_BUDGET', '50').to_f unless defined?(DEFAULT_BUDGET)
   APP_SECRET        = ENV.fetch('APP_SECRET', SecureRandom.hex(32)) unless defined?(APP_SECRET)
   TRIGGER_TOKEN     = ENV.fetch('TRIGGER_TOKEN', '') unless defined?(TRIGGER_TOKEN)
+  APP_PASSWORD      = ENV.fetch('APP_PASSWORD', '') unless defined?(APP_PASSWORD)
   PORT              = ENV.fetch('PORT', '4567').to_i unless defined?(PORT)
   DATABASE_PATH     = ENV.fetch('DATABASE_PATH', 'db/marketwatch.db') unless defined?(DATABASE_PATH)
 

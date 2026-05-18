@@ -19,6 +19,36 @@ class MarketwatchApp < Sinatra::Base
   permitted = ENV.fetch('PERMITTED_HOSTS', '').split(',').map(&:strip).reject(&:empty?)
   set :host_authorization, { permitted_hosts: permitted } unless permitted.empty?
 
+  use Rack::Session::Cookie,
+      key:    'mw_session',
+      secret: Settings::APP_SECRET,
+      expire_after: 60 * 60 * 24 * 30
+
+  before do
+    unless request.path_info.start_with?('/login')
+      redirect '/login' unless session[:authenticated]
+    end
+  end
+
+  get '/login' do
+    erb :login, layout: false
+  end
+
+  post '/login' do
+    if params[:password] == Settings::APP_PASSWORD
+      session[:authenticated] = true
+      redirect '/'
+    else
+      @error = 'Mot de passe incorrect'
+      erb :login, layout: false
+    end
+  end
+
+  get '/logout' do
+    session.clear
+    redirect '/login'
+  end
+
   get '/' do
     @analysis    = Analysis.order(Sequel.desc(:created_at)).first
     @current_bet = Bet.where(status: %w[pending open]).order(Sequel.desc(:created_at)).first

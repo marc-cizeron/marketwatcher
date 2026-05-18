@@ -12,6 +12,7 @@ services:
       - DEFAULT_BUDGET=${DEFAULT_BUDGET:-50}
       - APP_SECRET=${APP_SECRET:-dev_secret}
       - TRIGGER_TOKEN=${TRIGGER_TOKEN:-dev_token}
+      - APP_PASSWORD=${APP_PASSWORD:-dev}
       - PERMITTED_HOSTS=${PERMITTED_HOSTS:-localhost,127.0.0.1}
       - PORT=4567
       - DATABASE_PATH=db/marketwatch.db

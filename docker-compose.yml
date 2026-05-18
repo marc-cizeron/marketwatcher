@@ -12,6 +12,7 @@ services:
       - DEFAULT_BUDGET=${DEFAULT_BUDGET:-50}
       - APP_SECRET=${APP_SECRET}
       - TRIGGER_TOKEN=${TRIGGER_TOKEN}
+      - APP_PASSWORD=${APP_PASSWORD}
       - PERMITTED_HOSTS=${PERMITTED_HOSTS:-marketwatcher.cizeron.me}
       - PORT=4567
     volumes:
