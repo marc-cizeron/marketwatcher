@@ -12,11 +12,18 @@ class SureSync
   end
 
   def sync!
-    holdings = fetch_all_holdings
-    grouped  = group_by_ticker(holdings)
-    results  = { created: 0, updated: 0 }
+    trades   = fetch_all('trades')
+    holdings = fetch_all('holdings')
 
-    grouped.each do |ticker, data|
+    positions     = build_from_trades(trades)
+    current_prices = latest_prices_from_holdings(holdings)
+
+    positions.each do |ticker, data|
+      data[:current_price] = current_prices[ticker] if current_prices[ticker]
+    end
+
+    results = { created: 0, updated: 0 }
+    positions.each do |ticker, data|
       pos = Position.where(ticker: ticker).first
       if pos
         pos.update(
@@ -50,11 +57,60 @@ class SureSync
 
   private
 
-  def fetch_all_holdings
+  # Reconstruit les positions (shares + avg_price) depuis l'historique des trades.
+  # qty > 0 = achat, qty < 0 = vente.
+  def build_from_trades(trades)
+    positions = {}
+
+    trades.sort_by { |t| t['date'] || '' }.each do |t|
+      ticker = t.dig('security', 'ticker')
+      next if ticker.nil? || ticker.strip.empty?
+
+      qty   = t['qty'].to_f
+      price = parse_money(t['price']) || 0.0
+      next if qty.zero?
+
+      positions[ticker] ||= {
+        name:          (t.dig('security', 'name') || ticker).to_s,
+        shares:        0.0,
+        avg_price:     0.0,
+        current_price: 0.0
+      }
+
+      p = positions[ticker]
+      if qty > 0
+        total        = p[:shares] + qty
+        p[:avg_price] = total > 0 ? ((p[:avg_price] * p[:shares]) + (price * qty)) / total : 0.0
+        p[:shares]   = total
+      else
+        p[:shares] = [p[:shares] + qty, 0.0].max
+      end
+    end
+
+    positions.reject { |_, v| v[:shares] < 0.0001 }
+  end
+
+  # Prix de marché courant = dernier snapshot de holdings par ticker.
+  def latest_prices_from_holdings(holdings)
+    latest = {}
+    holdings.each do |h|
+      ticker = h.dig('security', 'ticker')
+      date   = h['date']
+      next unless ticker && date
+
+      if !latest[ticker] || date > latest[ticker]['date']
+        latest[ticker] = h
+      end
+    end
+
+    latest.transform_values { |h| parse_money(h['price']) }.compact
+  end
+
+  def fetch_all(resource)
     all  = []
     page = 1
     loop do
-      resp = @client.get('/api/v1/holdings') do |req|
+      resp = @client.get("/api/v1/#{resource}") do |req|
         req.headers['X-Api-Key'] = Settings::SURE_API_KEY
         req.headers['Accept']    = 'application/json'
         req.params['per_page']   = 100
@@ -62,54 +118,15 @@ class SureSync
       end
       raise "Sure API #{resp.status}: #{resp.body[0..200]}" unless resp.status == 200
 
-      body     = JSON.parse(resp.body)
-      holdings = body.is_a?(Array) ? body : (body['holdings'] || [])
-      break if holdings.empty?
+      body  = JSON.parse(resp.body)
+      items = body.is_a?(Array) ? body : (body[resource] || body['data'] || [])
+      break if items.empty?
 
-      all.concat(holdings)
-      break if holdings.size < 100
+      all.concat(items)
+      break if items.size < 100
       page += 1
     end
     all
-  end
-
-  def group_by_ticker(holdings)
-    # Sure retourne des snapshots journaliers — on garde uniquement
-    # le plus récent par (ticker, account) avant d'agréger.
-    latest = {}
-    holdings.each do |h|
-      ticker     = h.dig('security', 'ticker')
-      account_id = h.dig('account', 'id')
-      date       = h['date']
-      next if ticker.nil? || ticker.strip.empty? || date.nil?
-
-      key = [ticker, account_id]
-      latest[key] = h if !latest[key] || date > latest[key]['date']
-    end
-
-    grouped = {}
-    latest.each_value do |h|
-      ticker        = h.dig('security', 'ticker')
-      qty           = h['qty'].to_f
-      avg_cost      = parse_money(h['avg_cost']) || parse_money(h['price']) || 0.0
-      current_price = parse_money(h['price']) || 0.0
-
-      if grouped.key?(ticker)
-        e     = grouped[ticker]
-        total = e[:shares] + qty
-        e[:avg_price]     = total > 0 ? ((e[:avg_price] * e[:shares]) + (avg_cost * qty)) / total : 0.0
-        e[:shares]        = total
-        e[:current_price] = current_price
-      else
-        grouped[ticker] = {
-          name:          (h.dig('security', 'name') || ticker).to_s,
-          shares:        qty,
-          avg_price:     avg_cost,
-          current_price: current_price
-        }
-      end
-    end
-    grouped
   end
 
   def parse_money(val)
