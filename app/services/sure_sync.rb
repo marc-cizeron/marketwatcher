@@ -22,34 +22,41 @@ class SureSync
       data[:current_price] = current_prices[ticker] if current_prices[ticker]
     end
 
-    results = { created: 0, updated: 0 }
-    positions.each do |ticker, data|
-      pos = Position.where(ticker: ticker).first
-      if pos
-        pos.update(
-          shares:        data[:shares].round(6),
-          avg_price:     data[:avg_price].round(4),
-          current_price: data[:current_price].round(4),
-          updated_at:    Time.now
-        )
-        results[:updated] += 1
-      else
-        Position.create(
-          ticker:        ticker,
-          name:          data[:name],
-          exchange:      '',
-          sector:        'autre',
-          horizon:       'long',
-          avg_price:     data[:avg_price].round(4),
-          current_price: data[:current_price].round(4),
-          shares:        data[:shares].round(6),
-          conviction:    'haute',
-          notes:         'Importé depuis Sure',
-          added_at:      Date.today,
-          updated_at:    Time.now
-        )
-        results[:created] += 1
+    results = { created: 0, updated: 0, deleted: 0 }
+
+    DB.transaction do
+      positions.each do |ticker, data|
+        pos = Position.where(ticker: ticker).first
+        if pos
+          pos.update(
+            shares:        data[:shares].round(6),
+            avg_price:     data[:avg_price].round(4),
+            current_price: data[:current_price].round(4),
+            updated_at:    Time.now
+          )
+          results[:updated] += 1
+        else
+          Position.create(
+            ticker:        ticker,
+            name:          data[:name],
+            exchange:      '',
+            sector:        'autre',
+            horizon:       'long',
+            avg_price:     data[:avg_price].round(4),
+            current_price: data[:current_price].round(4),
+            shares:        data[:shares].round(6),
+            conviction:    'haute',
+            notes:         'Importé depuis Sure',
+            added_at:      Date.today,
+            updated_at:    Time.now
+          )
+          results[:created] += 1
+        end
       end
+
+      synced_tickers = positions.keys
+      deleted = Position.exclude(ticker: synced_tickers).delete
+      results[:deleted] = deleted
     end
 
     results

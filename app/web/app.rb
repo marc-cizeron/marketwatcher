@@ -111,7 +111,7 @@ class MarketwatchApp < Sinatra::Base
   post '/portfolio/sync' do
     require_relative '../../app/services/sure_sync'
     results = SureSync.new.sync!
-    notice = CGI.escape("#{results[:created]} créées, #{results[:updated]} mises à jour")
+    notice = CGI.escape("#{results[:created]} créées, #{results[:updated]} mises à jour, #{results[:deleted]} supprimées")
     redirect "/portfolio?notice=#{notice}"
   rescue => e
     halt 500, "Erreur sync Sure : #{e.message}"
