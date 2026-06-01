@@ -19,6 +19,7 @@ module Settings
   SMTP_PASS         = ENV.fetch('SMTP_PASS', '') unless defined?(SMTP_PASS)
   NOTIFY_EMAIL      = ENV.fetch('NOTIFY_EMAIL', '') unless defined?(NOTIFY_EMAIL)
   PORT              = ENV.fetch('PORT', '4567').to_i unless defined?(PORT)
+  PERMITTED_HOSTS   = ENV.fetch('PERMITTED_HOSTS', '') unless defined?(PERMITTED_HOSTS)
   DATABASE_PATH     = ENV.fetch('DATABASE_PATH', 'db/marketwatch.db') unless defined?(DATABASE_PATH)
 
   USER_CONTEXT = ENV.fetch('USER_CONTEXT',
