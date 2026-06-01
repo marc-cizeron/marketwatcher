@@ -1,0 +1,47 @@
+<div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem">
+  <a href="/portfolio" style="color:#64748b;text-decoration:none;font-size:1.2rem">←</a>
+  <h1 style="margin:0">Éditer <strong style="color:#38bdf8"><%= @position.ticker %></strong></h1>
+  <span class="neutral" style="font-size:0.875rem"><%= @position.name %></span>
+</div>
+
+<div class="card" style="max-width:520px">
+  <form method="post" action="/portfolio/<%= @position.id %>">
+    <div class="grid grid-2">
+      <div>
+        <label>Secteur</label>
+        <select name="sector">
+          <% ['energie','tech','defense','industrie','alimentation','autre'].each do |s| %>
+            <option <%= 'selected' if @position.sector == s %>><%= s %></option>
+          <% end %>
+        </select>
+      </div>
+      <div>
+        <label>Exchange</label>
+        <input name="exchange" value="<%= @position.exchange %>">
+      </div>
+      <div>
+        <label>Horizon</label>
+        <select name="horizon">
+          <option value="long"   <%= 'selected' if @position.horizon == 'long'   %>>Long terme</option>
+          <option value="medium" <%= 'selected' if @position.horizon == 'medium' %>>Moyen terme</option>
+        </select>
+      </div>
+      <div>
+        <label>Conviction</label>
+        <select name="conviction">
+          <option value="haute"   <%= 'selected' if @position.conviction == 'haute'   %>>Haute</option>
+          <option value="moyenne" <%= 'selected' if @position.conviction == 'moyenne' %>>Moyenne</option>
+          <option value="faible"  <%= 'selected' if @position.conviction == 'faible'  %>>Faible</option>
+        </select>
+      </div>
+    </div>
+    <div style="margin-top:0.5rem">
+      <label>Notes</label>
+      <textarea name="notes" rows="3"><%= @position.notes %></textarea>
+    </div>
+    <div style="display:flex;gap:0.75rem;margin-top:1.25rem">
+      <button class="btn btn-primary" type="submit">Enregistrer</button>
+      <a href="/portfolio" class="btn" style="background:#334155;color:#e2e8f0">Annuler</a>
+    </div>
+  </form>
+</div>

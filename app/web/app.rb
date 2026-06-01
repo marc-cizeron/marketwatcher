@@ -86,6 +86,21 @@ class MarketwatchApp < Sinatra::Base
 
   get '/portfolio' do
     @positions = Position.order(:sector, :ticker).all
+
+    @total_value    = @positions.sum { |p| p.market_value || 0 }.round(2)
+    @total_cost     = @positions.sum { |p| p.cost_basis   || 0 }.round(2)
+    @total_pnl_eur  = @positions.sum { |p| p.pnl_eur      || 0 }.round(2)
+    @total_pnl_pct  = @total_cost > 0 ? (@total_pnl_eur / @total_cost * 100).round(2) : nil
+    @position_count = @positions.count
+
+    @long_count  = @positions.count { |p| p.horizon == 'long' }
+    @medium_count = @positions.count { |p| p.horizon == 'medium' }
+    @long_pct    = @position_count > 0 ? (@long_count.to_f / @position_count * 100).round(0).to_i : 0
+
+    @by_sector = @positions.group_by(&:sector).transform_values { |ps|
+      ps.sum { |p| p.market_value || 0 }.round(2)
+    }.sort_by { |_, v| -v }.to_h
+
     erb :portfolio
   end
 
@@ -115,6 +130,26 @@ class MarketwatchApp < Sinatra::Base
     redirect "/portfolio?notice=#{notice}"
   rescue => e
     halt 500, "Erreur sync Sure : #{e.message}"
+  end
+
+  get '/portfolio/:id/edit' do
+    @position = Position.find(id: params[:id].to_i)
+    halt 404 unless @position
+    erb :portfolio_edit
+  end
+
+  post '/portfolio/:id' do
+    pos = Position.find(id: params[:id].to_i)
+    halt 404 unless pos
+    pos.update(
+      sector:     params[:sector],
+      horizon:    params[:horizon],
+      conviction: params[:conviction],
+      notes:      params[:notes],
+      exchange:   params[:exchange],
+      updated_at: Time.now
+    )
+    redirect '/portfolio'
   end
 
 

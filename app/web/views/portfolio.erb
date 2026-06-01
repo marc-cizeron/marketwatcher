@@ -10,54 +10,100 @@
   </div>
 <% end %>
 
-<div class="card">
-  <h2>Ajouter une position</h2>
-  <form method="post" action="/portfolio">
-    <div class="grid grid-3">
-      <div><label>Ticker</label><input name="ticker" required></div>
-      <div><label>Nom</label><input name="name" required></div>
-      <div><label>Exchange</label><input name="exchange" required></div>
-      <div><label>Secteur</label>
-        <select name="sector">
-          <% ['energie','tech','defense','industrie','alimentation','autre'].each do |s| %>
-            <option><%= s %></option>
-          <% end %>
-        </select>
-      </div>
-      <div><label>Horizon</label>
-        <select name="horizon">
-          <option value="long">Long terme</option>
-          <option value="medium">Moyen terme</option>
-        </select>
-      </div>
-      <div><label>Conviction</label>
-        <select name="conviction">
-          <option>haute</option><option>moyenne</option><option>faible</option>
-        </select>
-      </div>
-      <div><label>Prix moyen (€)</label><input name="avg_price" type="number" step="0.01" required></div>
-      <div><label>Prix actuel (€)</label><input name="current_price" type="number" step="0.01"></div>
-      <div><label>Nombre d'actions</label><input name="shares" type="number" step="0.0001" required></div>
+<div class="grid grid-4" style="margin-bottom:1.5rem">
+  <div class="card stat" style="margin-bottom:0">
+    <div class="stat-value"><%= @total_value > 0 ? "#{'%.0f' % @total_value} €" : '—' %></div>
+    <div class="stat-label">Valeur totale</div>
+  </div>
+  <div class="card stat" style="margin-bottom:0">
+    <div class="stat-value <%= @total_pnl_eur >= 0 ? 'positive' : 'negative' %>">
+      <%= @total_pnl_eur >= 0 ? '+' : '' %><%= '%.0f' % @total_pnl_eur %> €
     </div>
-    <div style="margin-top:1rem"><label>Notes</label><textarea name="notes" rows="2"></textarea></div>
-    <button class="btn btn-primary" style="margin-top:1rem" type="submit">Ajouter</button>
-  </form>
+    <div class="stat-label">
+      P&amp;L total<% if @total_pnl_pct %> (<%= @total_pnl_pct >= 0 ? '+' : '' %><%= @total_pnl_pct %>%)<% end %>
+    </div>
+  </div>
+  <div class="card stat" style="margin-bottom:0">
+    <div class="stat-value neutral"><%= @total_cost > 0 ? "#{'%.0f' % @total_cost} €" : '—' %></div>
+    <div class="stat-label">Capital investi</div>
+  </div>
+  <div class="card stat" style="margin-bottom:0">
+    <div class="stat-value"><%= @position_count %></div>
+    <div class="stat-label">Positions</div>
+  </div>
+</div>
+
+<div class="grid grid-2" style="margin-bottom:1.5rem">
+  <div class="card" style="margin-bottom:0">
+    <h2>Répartition sectorielle</h2>
+    <% if @by_sector.any? %>
+      <% @by_sector.each do |sector, value| %>
+        <% pct = @total_value > 0 ? (value / @total_value * 100).round(1) : 0 %>
+        <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.6rem">
+          <span style="width:80px;font-size:0.8rem;color:#94a3b8;text-transform:capitalize;flex-shrink:0"><%= sector %></span>
+          <div style="flex:1;background:#0f172a;border-radius:4px;height:6px">
+            <div style="width:<%= pct %>%;background:#38bdf8;height:6px;border-radius:4px"></div>
+          </div>
+          <span style="font-size:0.8rem;color:#e2e8f0;width:65px;text-align:right;flex-shrink:0"><%= '%.0f' % value %> €</span>
+          <span style="font-size:0.75rem;color:#64748b;width:32px;text-align:right;flex-shrink:0"><%= pct %>%</span>
+        </div>
+      <% end %>
+    <% else %>
+      <p class="neutral" style="font-size:0.875rem">Aucune position</p>
+    <% end %>
+  </div>
+
+  <div class="card" style="margin-bottom:0">
+    <h2>Horizon d'investissement</h2>
+    <% if @position_count > 0 %>
+      <div style="display:flex;height:8px;border-radius:4px;overflow:hidden;margin-bottom:1rem">
+        <% if @long_pct > 0 %>
+          <div style="width:<%= @long_pct %>%;background:#38bdf8"></div>
+        <% end %>
+        <% if @long_pct < 100 %>
+          <div style="width:<%= 100 - @long_pct %>%;background:#fbbf24"></div>
+        <% end %>
+      </div>
+      <div style="display:flex;gap:2.5rem">
+        <div>
+          <div style="font-size:1.5rem;font-weight:700;color:#38bdf8"><%= @long_count %></div>
+          <div style="font-size:0.8rem;color:#64748b">Long terme (<%= @long_pct %>%)</div>
+        </div>
+        <div>
+          <div style="font-size:1.5rem;font-weight:700;color:#fbbf24"><%= @medium_count %></div>
+          <div style="font-size:0.8rem;color:#64748b">Moyen terme (<%= 100 - @long_pct %>%)</div>
+        </div>
+      </div>
+    <% else %>
+      <p class="neutral" style="font-size:0.875rem">Aucune position</p>
+    <% end %>
+  </div>
 </div>
 
 <div class="card">
   <table>
-    <tr><th>Ticker</th><th>Secteur</th><th>Horizon</th><th>Valeur</th><th>P&L</th><th>Conviction</th><th>Prix actuel</th></tr>
+    <tr>
+      <th>Ticker</th><th>Secteur</th><th>Horizon</th>
+      <th style="text-align:right">Valeur</th><th style="text-align:right">P&amp;L</th>
+      <th>Conviction</th><th style="text-align:right">Prix actuel</th><th></th>
+    </tr>
     <% @positions.each do |p| %>
       <tr>
         <td><strong><%= p.ticker %></strong><br><small class="neutral"><%= p.name %></small></td>
         <td><%= p.sector %></td>
-        <td><%= p.horizon %></td>
-        <td><%= p.market_value ? "#{p.market_value}€" : '—' %></td>
-        <td class="<%= p.pnl_pct ? (p.pnl_pct >= 0 ? 'positive' : 'negative') : 'neutral' %>">
-          <%= p.pnl_pct ? "#{p.pnl_pct >= 0 ? '+' : ''}#{p.pnl_pct}% (#{p.pnl_eur}€)" : '—' %>
+        <td><span class="badge <%= p.horizon == 'long' ? 'badge-blue' : 'badge-yellow' %>"><%= p.horizon == 'long' ? 'Long' : 'Moyen' %></span></td>
+        <td style="text-align:right"><%= p.market_value ? "#{'%.0f' % p.market_value} €" : '—' %></td>
+        <td style="text-align:right" class="<%= p.pnl_pct ? (p.pnl_pct >= 0 ? 'positive' : 'negative') : 'neutral' %>">
+          <% if p.pnl_pct %>
+            <%= p.pnl_pct >= 0 ? '+' : '' %><%= p.pnl_pct %>%<br>
+            <small><%= p.pnl_eur >= 0 ? '+' : '' %><%= '%.0f' % p.pnl_eur %> €</small>
+          <% else %>
+            —
+          <% end %>
         </td>
         <td><span class="badge badge-<%= p.conviction == 'haute' ? 'green' : p.conviction == 'moyenne' ? 'blue' : 'gray' %>"><%= p.conviction %></span></td>
-        <td class="neutral"><%= p.current_price ? "#{p.current_price}€" : '—' %></td>
+        <td style="text-align:right" class="neutral"><%= p.current_price ? "#{p.current_price} €" : '—' %></td>
+        <td><a href="/portfolio/<%= p.id %>/edit" class="btn btn-sm" style="background:#1e3a5f;color:#93c5fd">✎</a></td>
       </tr>
     <% end %>
   </table>
