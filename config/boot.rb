@@ -12,5 +12,3 @@ require_relative '../app/models/bet'
 require_relative '../app/models/position'
 require_relative '../app/models/watchlist'
 require_relative '../app/web/app'
-
-Rack::Handler::WEBrick.run(MarketwatchApp, Port: Settings::PORT, Host: '0.0.0.0')
