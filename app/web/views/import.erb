@@ -283,6 +283,17 @@
     });
     statsHtml += '</div>';
 
+    // Erreurs sample
+    var errorsHtml = '';
+    if (job.sample_errors && job.sample_errors.length > 0) {
+      errorsHtml = '<div style="background:#450a0a;border:1px solid #7f1d1d;border-radius:0.5rem;padding:1rem;margin-bottom:1rem">' +
+        '<div style="color:#f87171;font-weight:600;margin-bottom:0.5rem">Exemple d\'erreurs (' + job.errors + ' au total) :</div>';
+      job.sample_errors.forEach(function(e) {
+        errorsHtml += '<div style="font-size:0.8rem;color:#fca5a5;margin-bottom:0.25rem"><strong>' + escHtml(e.name) + '</strong> → ' + escHtml(e.error) + '</div>';
+      });
+      errorsHtml += '</div>';
+    }
+
     // Titre
     var skipNote = job.skipped > 0 ? ' <span style="font-size:0.85rem;font-weight:400;color:#64748b">(' + job.skipped + ' déjà présentes, ignorées)</span>' : '';
     var title = 'Résultat — ' + job.ok + ' importées, ' + job.errors + ' erreurs' + skipNote;
@@ -310,7 +321,7 @@
     });
     tableHtml += '</tbody></table>';
 
-    html = '<div class="card"><h2 style="margin-bottom:1rem">' + title + '</h2>' + statsHtml + tableHtml + '</div>';
+    html = '<div class="card"><h2 style="margin-bottom:1rem">' + title + '</h2>' + errorsHtml + statsHtml + tableHtml + '</div>';
     document.getElementById('results-section').innerHTML = html;
   }
 

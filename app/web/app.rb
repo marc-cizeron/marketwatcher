@@ -202,7 +202,7 @@ class MarketwatchApp < Sinatra::Base
     else
       job_id = SecureRandom.hex(8)
       IMPORT_JOBS_MUTEX.synchronize do
-        IMPORT_JOBS[job_id] = { status: 'running', phase: 'démarrage', progress: 0, total: 0, ok: 0, errors: 0, skipped: 0 }
+        IMPORT_JOBS[job_id] = { status: 'running', phase: 'démarrage', progress: 0, total: 0, ok: 0, errors: 0, skipped: 0, sample_errors: [] }
         # Garder seulement les 20 derniers jobs
         oldest = IMPORT_JOBS.keys.first
         IMPORT_JOBS.delete(oldest) if IMPORT_JOBS.size > 20
@@ -217,7 +217,12 @@ class MarketwatchApp < Sinatra::Base
               j[:progress] = i
               j[:total]    = total
               j[:ok]      += 1 if row.status == 'ok'
-              j[:errors]  += 1 if row.status == 'error'
+              if row.status == 'error'
+                j[:errors] += 1
+                if j[:sample_errors].size < 5
+                  j[:sample_errors] << { name: row.name, error: row.error }
+                end
+              end
             end
           end
           IMPORT_JOBS_MUTEX.synchronize do

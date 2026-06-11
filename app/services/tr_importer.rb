@@ -34,9 +34,10 @@ class TrImporter
   Row    = Struct.new(:date, :account, :amount, :name, :tag, :notes, :status, :error, keyword_init: true)
 
   def initialize(dry_run: true, from_date: nil)
-    @dry_run   = dry_run
-    @from_date = from_date.is_a?(String) && !from_date.empty? ? Date.parse(from_date) : from_date
-    @client    = Faraday.new(url: Settings::SURE_API_URL) do |f|
+    @dry_run       = dry_run
+    @from_date     = from_date.is_a?(String) && !from_date.empty? ? Date.parse(from_date) : from_date
+    @first_request = true
+    @client        = Faraday.new(url: Settings::SURE_API_URL) do |f|
       f.options.timeout      = 30
       f.options.open_timeout = 10
     end
@@ -260,15 +261,36 @@ class TrImporter
         tag_names: [t[:tag]].compact
       }
     }
-    resp = @client.post("/api/v1/accounts/#{t[:account_id]}/transactions") do |req|
+
+    url = "/api/v1/accounts/#{t[:account_id]}/transactions"
+
+    # Log la première requête pour diagnostiquer le format attendu
+    if @first_request
+      @first_request = false
+      $stdout.puts "[TrImporter] Premier push → POST #{Settings::SURE_API_URL}#{url}"
+      $stdout.puts "[TrImporter] Payload: #{payload.to_json}"
+      $stdout.flush
+    end
+
+    resp = @client.post(url) do |req|
       req.headers['X-Api-Key']    = Settings::SURE_API_KEY
       req.headers['Content-Type'] = 'application/json'
       req.headers['Accept']       = 'application/json'
       req.body = payload.to_json
     end
+
     parsed = begin; JSON.parse(resp.body); rescue; resp.body; end
+
+    unless resp.status == 200 || resp.status == 201
+      $stdout.puts "[TrImporter] ERREUR HTTP #{resp.status} — #{t[:name]} — réponse: #{resp.body[0..300]}"
+      $stdout.flush
+    end
+
     [resp.status, parsed]
   rescue => e
+    $stdout.puts "[TrImporter] EXCEPTION: #{e.message}"
+    $stdout.flush
     [0, e.message]
   end
+
 end
