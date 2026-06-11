@@ -593,9 +593,31 @@ class TrImporter
       $stdout.puts "[TrImporter] TXN ERREUR #{resp.status} — #{t[:name]} — #{resp.body[0..300]}"
       $stdout.flush
     end
+
+    # Si la transaction existe déjà (200), on met à jour le label d'activité
+    # s'il n'est pas encore renseigné.
+    if resp.status == 200 && parsed.is_a?(Hash)
+      txn_id = parsed['id'] || parsed.dig('transaction', 'id')
+      label  = TAG_TO_ACTIVITY[t[:tag]]
+      if txn_id && label && parsed['investment_activity_label'].nil?
+        patch_transaction_label(txn_id, label)
+      end
+    end
+
     [resp.status, parsed]
   rescue => e
     $stdout.puts "[TrImporter] TXN EXCEPTION: #{e.message}"; $stdout.flush
     [0, e.message]
+  end
+
+  def patch_transaction_label(id, label)
+    @client.patch("/api/v1/transactions/#{id}") do |req|
+      req.headers['X-Api-Key']    = Settings::SURE_API_KEY
+      req.headers['Content-Type'] = 'application/json'
+      req.headers['Accept']       = 'application/json'
+      req.body = { transaction: { investment_activity_label: label } }.to_json
+    end
+  rescue => e
+    $stderr.puts "[TrImporter] PATCH label failed: #{e.message}"
   end
 end
