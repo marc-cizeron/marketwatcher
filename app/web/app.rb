@@ -276,6 +276,20 @@ class MarketwatchApp < Sinatra::Base
     job.to_json
   end
 
+  # Purge toutes les transactions SUR des comptes TR (pour réimporter proprement)
+  post '/import/purge' do
+    require_relative '../../app/services/tr_importer'
+    importer = TrImporter.new(dry_run: false)
+    what     = params[:what].to_s  # "transactions", "trades", ou "all"
+
+    result = {}
+    result[:transactions] = importer.purge_transactions! if %w[transactions all].include?(what)
+    result[:trades]       = importer.purge_trades!       if %w[trades all].include?(what)
+
+    content_type :json
+    result.to_json
+  end
+
   # Sauvegarde d'une correspondance ISIN → ticker
   post '/import/tickers' do
     require_relative '../../app/models/ticker_mapping'

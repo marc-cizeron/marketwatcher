@@ -40,6 +40,20 @@
     </div>
   </form>
 
+  <!-- Zone purge -->
+  <div style="margin-top:1.5rem;padding-top:1rem;border-top:1px solid #334155">
+    <div style="font-size:0.8rem;color:#64748b;margin-bottom:0.75rem">
+      Données existantes dans SUR — à utiliser si un import précédent avait des erreurs (signes, labels…)
+    </div>
+    <div style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:center">
+      <button class="btn btn-sm" style="background:#450a0a;color:#fca5a5" type="button"
+              id="purge-txn-btn">🗑 Supprimer les transactions TR</button>
+      <button class="btn btn-sm" style="background:#422006;color:#fed7aa" type="button"
+              id="purge-trades-btn">🗑 Supprimer les trades TR</button>
+      <span id="purge-status" style="font-size:0.8rem;color:#64748b"></span>
+    </div>
+  </div>
+
   <!-- Résultat discover -->
   <div id="discover-result" style="display:none;margin-top:1rem;background:#0f172a;border:1px solid #334155;border-radius:0.5rem;padding:1rem">
     <div style="font-size:0.75rem;color:#64748b;margin-bottom:0.5rem">Comptes SUR détectés</div>
@@ -204,6 +218,35 @@
         btn.disabled = false;
       });
   });
+
+  // ── Purge ─────────────────────────────────────────────────────
+  function doPurge(what, btn) {
+    var label = what === 'transactions' ? 'transactions' : 'trades';
+    if (!confirm('Supprimer TOUTES les ' + label + ' Trade Republic dans SUR ?\nCette action est irréversible.')) return;
+    btn.disabled = true;
+    var orig = btn.textContent;
+    btn.textContent = '⏳ Suppression…';
+    document.getElementById('purge-status').textContent = '';
+    var body = new URLSearchParams({ what: what });
+    fetch('/import/purge', { method: 'POST', body: body })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        var res = d[what] || d;
+        document.getElementById('purge-status').textContent =
+          '✓ ' + (res.deleted || 0) + ' supprimées' + (res.errors > 0 ? ', ' + res.errors + ' erreurs' : '');
+        btn.textContent = orig;
+        btn.disabled = false;
+      })
+      .catch(function(e) {
+        document.getElementById('purge-status').textContent = 'Erreur: ' + e.message;
+        btn.textContent = orig;
+        btn.disabled = false;
+      });
+  }
+  var ptBtn   = document.getElementById('purge-txn-btn');
+  var ptrdBtn = document.getElementById('purge-trades-btn');
+  if (ptBtn)   ptBtn.addEventListener('click',   function() { doPurge('transactions', ptBtn); });
+  if (ptrdBtn) ptrdBtn.addEventListener('click', function() { doPurge('trades', ptrdBtn); });
 
   // ── Import réel (bouton principal) ───────────────────────────
   function startImport(fileInput, fromDate) {

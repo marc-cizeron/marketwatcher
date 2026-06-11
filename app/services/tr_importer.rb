@@ -398,6 +398,85 @@ class TrImporter
     TICKER_MAP.dup
   end
 
+  # ── Purge : supprime toutes les transactions des comptes TR dans SUR ──────
+
+  def purge_transactions!
+    deleted = 0
+    errors  = 0
+    ACCOUNTS.each_value do |account_id|
+      page = 1
+      loop do
+        resp = @client.get('/api/v1/transactions') do |req|
+          req.headers['X-Api-Key'] = Settings::SURE_API_KEY
+          req.headers['Accept']    = 'application/json'
+          req.params['account_id'] = account_id
+          req.params['per_page']   = 100
+          req.params['page']       = page
+        end
+        break unless resp.status == 200
+
+        body  = JSON.parse(resp.body)
+        items = body.is_a?(Array) ? body : (body['transactions'] || body['data'] || [])
+        break if items.empty?
+
+        items.each do |t|
+          id = t['id']
+          next unless id
+          del = @client.delete("/api/v1/transactions/#{id}") do |req|
+            req.headers['X-Api-Key'] = Settings::SURE_API_KEY
+            req.headers['Accept']    = 'application/json'
+          end
+          del.status == 200 ? deleted += 1 : errors += 1
+          sleep 0.03
+        end
+
+        break if items.size < 100
+        page += 1
+      end
+    end
+    { deleted: deleted, errors: errors }
+  rescue => e
+    { deleted: deleted, errors: errors, message: e.message }
+  end
+
+  # ── Purge trades : supprime tous les trades des comptes TR dans SUR ───────
+
+  def purge_trades!
+    deleted = 0
+    errors  = 0
+    page = 1
+    loop do
+      resp = @client.get('/api/v1/trades') do |req|
+        req.headers['X-Api-Key'] = Settings::SURE_API_KEY
+        req.headers['Accept']    = 'application/json'
+        req.params['per_page']   = 100
+        req.params['page']       = page
+      end
+      break unless resp.status == 200
+
+      body  = JSON.parse(resp.body)
+      items = body.is_a?(Array) ? body : (body['trades'] || body['data'] || [])
+      break if items.empty?
+
+      items.each do |t|
+        id = t['id']
+        next unless id
+        del = @client.delete("/api/v1/trades/#{id}") do |req|
+          req.headers['X-Api-Key'] = Settings::SURE_API_KEY
+          req.headers['Accept']    = 'application/json'
+        end
+        del.status == 200 ? deleted += 1 : errors += 1
+        sleep 0.03
+      end
+
+      break if items.size < 100
+      page += 1
+    end
+    { deleted: deleted, errors: errors }
+  rescue => e
+    { deleted: deleted, errors: errors, message: e.message }
+  end
+
   # ── Date du dernier trade dans SUR ───────────────────────────────────────
 
   def fetch_latest_trade_date
