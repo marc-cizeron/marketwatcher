@@ -276,18 +276,19 @@ class MarketwatchApp < Sinatra::Base
     job.to_json
   end
 
-  # Purge toutes les transactions SUR des comptes TR (pour réimporter proprement)
+  # Purge toutes les transactions/trades SUR des comptes TR
   post '/import/purge' do
+    content_type :json
+    what = params[:what].to_s
     require_relative '../../app/services/tr_importer'
     importer = TrImporter.new(dry_run: false)
-    what     = params[:what].to_s  # "transactions", "trades", ou "all"
-
-    result = {}
+    result   = {}
     result[:transactions] = importer.purge_transactions! if %w[transactions all].include?(what)
     result[:trades]       = importer.purge_trades!       if %w[trades all].include?(what)
-
-    content_type :json
     result.to_json
+  rescue => e
+    $stderr.puts "[purge] #{e.class}: #{e.message}\n#{e.backtrace.first(5).join("\n")}"
+    { error: e.message }.to_json
   end
 
   # Sauvegarde d'une correspondance ISIN → ticker
@@ -312,6 +313,7 @@ class MarketwatchApp < Sinatra::Base
 
   # Découverte des comptes SUR (pour diagnostiquer les 404)
   get '/import/discover' do
+    content_type :json
     require 'faraday'
     client = Faraday.new(url: Settings::SURE_API_URL) do |f|
       f.options.timeout = 10; f.options.open_timeout = 5
@@ -320,10 +322,8 @@ class MarketwatchApp < Sinatra::Base
       req.headers['X-Api-Key'] = Settings::SURE_API_KEY
       req.headers['Accept']    = 'application/json'
     end
-    content_type :json
     resp.body
   rescue => e
-    content_type :json
     { error: e.message }.to_json
   end
 
