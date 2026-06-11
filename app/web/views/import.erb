@@ -108,16 +108,17 @@
     </div>
 
     <table>
-      <thead><tr><th>Date</th><th>Compte</th><th>Montant</th><th>Catégorie</th><th>Libellé</th></tr></thead>
+      <thead><tr><th>Date</th><th>Compte</th><th>Type</th><th>Montant</th><th>Catégorie</th><th>Libellé</th></tr></thead>
       <tbody>
         <% rows.each do |row| %>
-          <% tag_color = {'Investissement'=>'badge-blue','Dividende'=>'badge-green','Dépôt'=>'badge-green','Taxes'=>'badge-red','Frais de courtage'=>'badge-red','Frais'=>'badge-red','Retrait'=>'badge-yellow'}[row.tag] || 'badge-gray' %>
+          <% tag_color = {'Trade'=>'badge-blue','Dividende'=>'badge-green','Dépôt'=>'badge-green','Taxes'=>'badge-red','Frais de courtage'=>'badge-red','Frais'=>'badge-red','Retrait'=>'badge-yellow'}[row.tag] || 'badge-gray' %>
           <tr>
             <td style="color:#94a3b8;white-space:nowrap"><%= row.date %></td>
             <td><span class="badge <%= row.account == 'PEA' ? 'badge-blue' : 'badge-gray' %>"><%= row.account %></span></td>
-            <td class="<%= row.amount >= 0 ? 'positive' : 'negative' %>" style="white-space:nowrap"><%= row.amount >= 0 ? '+' : '' %><%= row.amount.round(2) %>€</td>
+            <td><span class="badge <%= row.kind == :trade ? 'badge-yellow' : 'badge-gray' %>"><%= row.kind == :trade ? 'Trade' : 'Cash' %></span></td>
+            <td class="<%= row.amount && row.amount >= 0 ? 'positive' : 'negative' %>" style="white-space:nowrap"><%= row.amount && row.amount >= 0 ? '+' : '' %><%= row.amount&.round(2) %>€</td>
             <td><span class="badge <%= tag_color %>"><%= row.tag %></span></td>
-            <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="<%= row.notes %>"><%= row.name %></td>
+            <td style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><%= row.name %></td>
           </tr>
         <% end %>
       </tbody>
