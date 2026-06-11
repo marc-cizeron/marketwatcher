@@ -170,6 +170,7 @@ class TrImporter
       ticker = TICKER_MAP[symbol] || symbol
       items << base.merge(
         kind:           :trade,
+        trade_type:     'buy',
         ticker:         ticker,
         qty:            shares.abs.round(8),
         price:          price,
@@ -194,6 +195,7 @@ class TrImporter
       ticker = TICKER_MAP[symbol] || symbol
       items << base.merge(
         kind:           :trade,
+        trade_type:     'sell',
         ticker:         ticker,
         qty:            -(shares.abs.round(8)),  # négatif = vente
         price:          price,
@@ -397,6 +399,7 @@ class TrImporter
       trade: {
         account_id: t[:account_id],
         date:       t[:date],
+        type:       t[:trade_type],
         qty:        t[:qty],
         price:      t[:price],
         fee:        t[:fee],
