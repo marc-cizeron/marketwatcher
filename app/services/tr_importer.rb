@@ -50,8 +50,9 @@ class TrImporter
       all_txns.select! { |t| Date.parse(t[:date]) >= @from_date }
     end
 
-    # Récupérer les IDs déjà présents dans SUR pour éviter les doublons
-    existing_ids = fetch_existing_tr_ids
+    # En dry-run : pas d'appel SUR, on montre tout le CSV tel quel.
+    # En import réel : on scanne les transactions existantes pour dédupliquer.
+    existing_ids = @dry_run ? Set.new : fetch_existing_tr_ids
 
     new_txns      = all_txns.reject { |t| existing_ids.include?(t[:tr_id]) }
     skipped_count = all_txns.size - new_txns.size
