@@ -1,0 +1,156 @@
+<h1>Import Trade Republic</h1>
+
+<div class="card">
+  <h2>Importer un CSV Trade Republic</h2>
+  <p style="color:#94a3b8;font-size:0.875rem;margin-bottom:1rem">
+    Exportez vos transactions depuis l'app Trade Republic → <em>Profil → Documents → Exportation de transactions</em>.
+    Chaque ligne CSV peut générer plusieurs transactions SUR (principal, frais de courtage, taxes séparément).
+  </p>
+
+  <% if defined?(@error) && @error %>
+    <div style="background:#450a0a;border:1px solid #7f1d1d;border-radius:0.5rem;padding:0.75rem 1rem;margin-bottom:1rem;color:#f87171">
+      <%= @error %>
+    </div>
+  <% end %>
+
+  <form method="post" action="/import" enctype="multipart/form-data">
+    <div class="grid grid-2" style="gap:1rem">
+      <div>
+        <label>Fichier CSV</label>
+        <input type="file" name="file" accept=".csv" required>
+      </div>
+      <div>
+        <label>Importer à partir du (optionnel)</label>
+        <input type="date" name="from_date" value="<%= params[:from_date] %>">
+      </div>
+    </div>
+
+    <div style="margin-top:1rem;display:flex;gap:1rem;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-primary" type="submit" name="dry_run" value="true">
+        Aperçu (dry-run)
+      </button>
+      <button class="btn" style="background:#065f46;color:#6ee7b7" type="submit" name="dry_run" value="false">
+        Importer réellement
+      </button>
+      <span style="color:#64748b;font-size:0.8rem">L'aperçu ne fait rien — il simule le résultat.</span>
+    </div>
+  </form>
+</div>
+
+<% if @result %>
+  <% rows = @result.rows %>
+
+  <%# Grouper par tag pour les stats %>
+  <% by_tag = rows.group_by(&:tag) %>
+  <% tags_order = %w[Investissement Dividende Dépôt Retrait Intérêts Frais\ de\ courtage Taxes Frais Virement\ interne Autre] %>
+
+  <div class="card">
+    <h2 style="margin-bottom:1rem">
+      <% if @dry_run %>
+        Aperçu — <%= rows.size %> nouvelles transactions
+        <% if @result.skipped > 0 %>
+          <span style="font-size:0.85rem;font-weight:400;color:#64748b;margin-left:0.5rem">
+            (<%= @result.skipped %> déjà importées, ignorées)
+          </span>
+        <% end %>
+      <% else %>
+        Résultat — <%= @result.ok %> importées, <%= @result.errors %> erreurs
+        <% if @result.skipped > 0 %>
+          <span style="font-size:0.85rem;font-weight:400;color:#64748b;margin-left:0.5rem">
+            (<%= @result.skipped %> déjà présentes, ignorées)
+          </span>
+        <% end %>
+      <% end %>
+    </h2>
+
+    <%# Stats par catégorie %>
+    <div style="display:flex;flex-wrap:wrap;gap:0.75rem;margin-bottom:1.5rem">
+      <% by_tag.sort_by { |tag, _| tags_order.index(tag) || 99 }.each do |tag, tag_rows| %>
+        <% total_amount = tag_rows.sum(&:amount).round(2) %>
+        <div style="background:#0f172a;border:1px solid #334155;border-radius:0.5rem;padding:0.5rem 0.875rem;min-width:140px">
+          <div style="font-size:0.75rem;color:#64748b;margin-bottom:0.25rem"><%= tag %></div>
+          <div style="font-size:0.9rem;font-weight:600;color:<%= total_amount >= 0 ? '#4ade80' : '#f87171' %>">
+            <%= total_amount >= 0 ? '+' : '' %><%= total_amount %>€
+          </div>
+          <div style="font-size:0.75rem;color:#475569"><%= tag_rows.size %> ligne<%= tag_rows.size > 1 ? 's' : '' %></div>
+        </div>
+      <% end %>
+    </div>
+
+    <% if rows.empty? %>
+      <p style="color:#64748b;font-size:0.875rem">Aucune transaction correspondant aux critères.</p>
+    <% else %>
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Compte</th>
+            <th>Montant</th>
+            <th>Catégorie</th>
+            <th>Libellé</th>
+            <% unless @dry_run %><th>Statut</th><% end %>
+          </tr>
+        </thead>
+        <tbody>
+          <% rows.each do |row| %>
+            <tr>
+              <td style="color:#94a3b8;white-space:nowrap"><%= row.date %></td>
+              <td>
+                <span class="badge <%= row.account == 'PEA' ? 'badge-blue' : 'badge-gray' %>">
+                  <%= row.account %>
+                </span>
+              </td>
+              <td class="<%= row.amount >= 0 ? 'positive' : 'negative' %>" style="white-space:nowrap">
+                <%= row.amount >= 0 ? '+' : '' %><%= row.amount.round(2) %>€
+              </td>
+              <td>
+                <%
+                  tag_color = case row.tag
+                  when 'Investissement' then 'badge-blue'
+                  when 'Dividende'      then 'badge-green'
+                  when 'Dépôt'          then 'badge-green'
+                  when 'Taxes', 'Frais de courtage', 'Frais' then 'badge-red'
+                  when 'Retrait'        then 'badge-yellow'
+                  else 'badge-gray'
+                  end
+                %>
+                <span class="badge <%= tag_color %>"><%= row.tag %></span>
+              </td>
+              <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="<%= row.notes %>">
+                <%= row.name %>
+              </td>
+              <% unless @dry_run %>
+                <td>
+                  <% if row.status == 'ok' %>
+                    <span class="badge badge-green">✓</span>
+                  <% else %>
+                    <span class="badge badge-red" title="<%= row.error %>">✗</span>
+                  <% end %>
+                </td>
+              <% end %>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    <% end %>
+  </div>
+
+  <% if @dry_run && rows.size > 0 %>
+    <div class="card" style="border-color:#0369a1">
+      <h2>Confirmer l'import</h2>
+      <p style="color:#94a3b8;font-size:0.875rem;margin-bottom:1rem">
+        <%= rows.size %> transactions seront envoyées vers SUR.
+        Cette opération ne vérifie pas les doublons — n'importez pas deux fois le même fichier.
+      </p>
+      <form method="post" action="/import" enctype="multipart/form-data">
+        <input type="hidden" name="dry_run" value="false">
+        <input type="hidden" name="from_date" value="<%= params[:from_date] %>">
+        <label>Re-sélectionnez le fichier CSV pour confirmer</label>
+        <input type="file" name="file" accept=".csv" required style="margin-bottom:1rem">
+        <button class="btn" style="background:#065f46;color:#6ee7b7" type="submit">
+          Confirmer l'import (<%= rows.size %> transactions)
+        </button>
+      </form>
+    </div>
+  <% end %>
+<% end %>

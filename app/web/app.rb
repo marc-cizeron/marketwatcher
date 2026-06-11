@@ -169,6 +169,37 @@ class MarketwatchApp < Sinatra::Base
     erb :settings
   end
 
+  get '/import' do
+    @result = nil
+    erb :import
+  end
+
+  post '/import' do
+    unless params[:file] && params[:file][:tempfile]
+      @error = 'Aucun fichier sélectionné'
+      @result = nil
+      next erb :import
+    end
+
+    csv_content = params[:file][:tempfile].read.force_encoding('UTF-8')
+    dry_run     = params[:dry_run] != 'false'
+    from_date   = params[:from_date].to_s.strip
+
+    require_relative '../../app/services/tr_importer'
+    importer = TrImporter.new(dry_run: dry_run, from_date: from_date.empty? ? nil : from_date)
+    @result  = importer.import!(csv_content)
+    @dry_run = dry_run
+    erb :import
+  rescue CSV::MalformedCSVError => e
+    @error  = "CSV invalide : #{e.message}"
+    @result = nil
+    erb :import
+  rescue => e
+    @error  = "Erreur : #{e.message}"
+    @result = nil
+    erb :import
+  end
+
   post '/trigger' do
     halt 403 unless params[:token] == Settings::TRIGGER_TOKEN
     require_relative '../../app/jobs/monthly_analysis'
