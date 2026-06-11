@@ -25,36 +25,42 @@ class TrImporter
 
   # ISIN → ticker Yahoo Finance (utilisé pour les trades)
   TICKER_MAP = {
+    # Actions françaises
     'FR0000120271' => 'TTE.PA',
     'FR0000131906' => 'RNO.PA',
-    'FR0000073272' => 'SAF.PA',
-    'FR0000121329' => 'HO.PA',
-    'FR0014004L86' => 'AM.PA',
-    'FR0010221234' => 'ETL.PA',
     'FR0000120073' => 'AI.PA',
-    'FR0000054470' => 'UBI.PA',
+    'FR0000121329' => 'HO.PA',
+    'FR0000073272' => 'SAF.PA',
+    'FR0014004L86' => 'AM.PA',
     'FR0010220475' => 'ALO.PA',
-    'NL0010273215' => 'ASML.AS',
+    'FR0000054470' => 'UBI.PA',
+    'FR0010221234' => 'ETL.PA',
+    # ETFs
+    'FR001400U5Q4' => 'DCAM.PA',
+    'FR0011550185' => 'ESE.PA',
+    'FR0013380607' => 'CACC.PA',
+    'LU1681048804' => '500.PA',
+    'IE000BI8OT95' => 'MWRD.PA',
+    'IE00BMTM6B32' => '3OIL.L',
+    # Actions européennes
     'LU1598757687' => 'MT.AS',
-    'NL00150001Q9' => 'STLAM.MI',
-    'DE0007030009' => 'RHM.DE',
+    'NL0010273215' => 'ASML.AS',
+    'NL00150001Q9' => 'NL00150001Q9.SG',
     'DE0005313704' => 'AFX.DE',
+    'DE0007030009' => 'RHM.DE',
+    # Actions US / Canada / Asie
     'US67066G1040' => 'NVDA',
-    'US52661A1088' => 'DRS',
-    'US5024413065' => 'LVMUY',
-    'KYG982AW1003' => 'XPEV',
-    'CNE100000296' => '1211.HK',
-    'CA13321L1085' => 'CCO.TO',
     'US5253271028' => 'LDOS',
     'US75513E1010' => 'RTX',
-    'FR0013380607' => 'C40.PA',
-    'IE000BI8OT95' => 'IWDA.AS',
-    'LU1681048804' => 'CSPX.L',
-    'FR0011550185' => 'SP5C.PA',
-    'FR001400U5Q4' => 'EWLD.PA',
-    'IE00BMTM6B32' => 'WITR.AS',
-    'DE000SQ4SUR5' => 'DE000SQ4SUR5',
-    'BTC'          => 'BTC-EUR',
+    'US52661A1088' => 'DRS',
+    'US5024413065' => 'LVMUY',
+    'CA13321L1085' => 'CCJ',
+    'CNE100000296' => '1211.HK',
+    'KYG982AW1003' => '9868.HK',
+    # Crypto
+    'BTC'          => 'BTC-USD',
+    # Produits structurés sans ticker Yahoo — ignorés (trade non créé)
+    # 'DE000SQ4SUR5' => nil,
   }.freeze
 
   SKIP_TYPES = %w[
@@ -167,7 +173,8 @@ class TrImporter
 
     # ── Achats → trade (fee inclus) + TTF en transaction séparée ────────────
     when 'BUY'
-      ticker = TICKER_MAP[symbol] || symbol
+      ticker = TICKER_MAP[symbol]
+      return [] unless ticker  # produit sans ticker Yahoo connu → ignoré
       items << base.merge(
         kind:           :trade,
         trade_type:     'buy',
@@ -192,7 +199,8 @@ class TrImporter
 
     # ── Ventes → trade (fee inclus) + impôt éventuel ────────────────────────
     when 'SELL'
-      ticker = TICKER_MAP[symbol] || symbol
+      ticker = TICKER_MAP[symbol]
+      return [] unless ticker  # produit sans ticker Yahoo connu → ignoré
       items << base.merge(
         kind:           :trade,
         trade_type:     'sell',
