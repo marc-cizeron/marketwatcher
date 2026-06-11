@@ -54,7 +54,7 @@ class TrImporter
     'FR001400U5Q4' => 'EWLD.PA',
     'IE00BMTM6B32' => 'WITR.AS',
     'DE000SQ4SUR5' => 'DE000SQ4SUR5',
-    'BTC'          => 'BTC/EUR',
+    'BTC'          => 'BTC-EUR',
   }.freeze
 
   SKIP_TYPES = %w[
