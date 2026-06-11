@@ -61,6 +61,19 @@ class TrImporter
     # 'DE000SQ4SUR5' => nil,
   }.freeze
 
+  # Correspondance tag interne → investment_activity_label SUR
+  TAG_TO_ACTIVITY = {
+    'Dividende'         => 'Dividend',
+    'Taxes'             => 'Fee',
+    'Intérêts'          => 'Interest',
+    'Dépôt'             => 'Contribution',
+    'Frais'             => 'Fee',
+    'Frais de courtage' => 'Fee',
+    'Retrait'           => 'Withdrawal',
+    'Virement interne'  => 'Transfer',
+    'Autre'             => 'Other',
+  }.freeze
+
   SKIP_TYPES = %w[
     MIGRATION
     BONUS_ISSUE
@@ -471,13 +484,14 @@ class TrImporter
     # On inverse donc le signe du CSV avant envoi.
     payload = {
       transaction: {
-        account_id:  t[:account_id],
-        date:        t[:date],
-        amount:      -t[:amount],
-        name:        t[:name],
-        notes:       t[:notes],
-        external_id: t[:external_id],
-        source:      'trade_republic'
+        account_id:                t[:account_id],
+        date:                      t[:date],
+        amount:                    -t[:amount],
+        name:                      t[:name],
+        notes:                     t[:notes],
+        external_id:               t[:external_id],
+        source:                    'trade_republic',
+        investment_activity_label: TAG_TO_ACTIVITY[t[:tag]]
       }
     }
 
