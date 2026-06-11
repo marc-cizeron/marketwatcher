@@ -5,7 +5,12 @@ require_relative 'settings'
 require_relative 'database'
 
 Sequel.extension :migration
-Sequel::Migrator.run(DB, File.join(File.dirname(__FILE__), '../db/migrations')) rescue nil
+begin
+  Sequel::Migrator.run(DB, File.join(File.dirname(__FILE__), '../db/migrations'))
+rescue => e
+  $stderr.puts "[Boot] Migration error: #{e.message}"
+  raise
+end
 
 require_relative '../app/models/analysis'
 require_relative '../app/models/bet'
