@@ -594,13 +594,18 @@ class TrImporter
       $stdout.flush
     end
 
-    # Si la transaction existe déjà (200), on met à jour le label d'activité
-    # s'il n'est pas encore renseigné.
+    # Transaction déjà présente (200) → PATCH pour mettre à jour le label d'activité.
+    # On PATCH systématiquement : SUR ne met pas à jour les champs lors d'un POST idempotent.
     if resp.status == 200 && parsed.is_a?(Hash)
-      txn_id = parsed['id'] || parsed.dig('transaction', 'id')
       label  = TAG_TO_ACTIVITY[t[:tag]]
-      if txn_id && label && parsed['investment_activity_label'].nil?
+      # Réponse peut être plate {id:...} ou imbriquée {transaction:{id:...}}
+      txn    = parsed.key?('id') ? parsed : (parsed['transaction'] || parsed['entry'] || {})
+      txn_id = txn['id']
+      if txn_id && label
         patch_transaction_label(txn_id, label)
+      else
+        $stdout.puts "[TrImporter] PATCH skipped — txn_id=#{txn_id.inspect} label=#{label.inspect} keys=#{parsed.keys.inspect}"
+        $stdout.flush
       end
     end
 
@@ -611,13 +616,17 @@ class TrImporter
   end
 
   def patch_transaction_label(id, label)
-    @client.patch("/api/v1/transactions/#{id}") do |req|
+    resp = @client.patch("/api/v1/transactions/#{id}") do |req|
       req.headers['X-Api-Key']    = Settings::SURE_API_KEY
       req.headers['Content-Type'] = 'application/json'
       req.headers['Accept']       = 'application/json'
       req.body = { transaction: { investment_activity_label: label } }.to_json
     end
+    unless resp.status == 200
+      $stdout.puts "[TrImporter] PATCH label HTTP #{resp.status} — id=#{id} label=#{label} — #{resp.body[0..200]}"
+      $stdout.flush
+    end
   rescue => e
-    $stderr.puts "[TrImporter] PATCH label failed: #{e.message}"
+    $stderr.puts "[TrImporter] PATCH label exception: #{e.message}"
   end
 end
