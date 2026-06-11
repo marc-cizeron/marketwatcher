@@ -67,7 +67,7 @@ class TrImporter
     PEA_MARKETING
   ].freeze
 
-  Result = Struct.new(:ok, :errors, :skipped, :rows, keyword_init: true)
+  Result = Struct.new(:ok, :errors, :skipped, :rows, :trade_cutoff, keyword_init: true)
   Row    = Struct.new(:kind, :date, :account, :amount, :name, :tag, :status, :error, keyword_init: true)
 
   def initialize(dry_run: true, from_date: nil)
@@ -87,6 +87,17 @@ class TrImporter
 
     if @from_date
       all_items.select! { |t| Date.parse(t[:date]) >= @from_date }
+    end
+
+    # Pour les trades : récupère le dernier trade dans SUR et ignore les plus anciens.
+    # Les transactions utilisent external_id pour leur propre déduplication.
+    trade_cutoff = @dry_run ? nil : fetch_latest_trade_date
+    if trade_cutoff
+      before = all_items.count { |t| t[:kind] == :trade }
+      all_items.reject! { |t| t[:kind] == :trade && Date.parse(t[:date]) <= trade_cutoff }
+      after = all_items.count { |t| t[:kind] == :trade }
+      $stdout.puts "[TrImporter] Dernier trade SUR : #{trade_cutoff} — #{before - after} trades ignorés, #{after} nouveaux"
+      $stdout.flush
     end
 
     total       = all_items.size
@@ -122,7 +133,7 @@ class TrImporter
       on_progress.call(i + 1, total, row) if block_given?
     end
 
-    Result.new(ok: ok, errors: errors, skipped: skipped, rows: result_rows)
+    Result.new(ok: ok, errors: errors, skipped: skipped, rows: result_rows, trade_cutoff: trade_cutoff)
   end
 
   private
@@ -339,6 +350,40 @@ class TrImporter
     end
 
     items
+  end
+
+  # ── Date du dernier trade dans SUR ───────────────────────────────────────
+
+  def fetch_latest_trade_date
+    latest = nil
+    page   = 1
+    loop do
+      resp = @client.get('/api/v1/trades') do |req|
+        req.headers['X-Api-Key'] = Settings::SURE_API_KEY
+        req.headers['Accept']    = 'application/json'
+        req.params['per_page']   = 100
+        req.params['page']       = page
+      end
+      break unless resp.status == 200
+
+      body  = JSON.parse(resp.body)
+      items = body.is_a?(Array) ? body : (body['trades'] || body['data'] || [])
+      break if items.empty?
+
+      items.each do |t|
+        d = t['date'].to_s
+        next if d.empty?
+        parsed = Date.parse(d) rescue next
+        latest = parsed if latest.nil? || parsed > latest
+      end
+
+      break if items.size < 100
+      page += 1
+    end
+    latest
+  rescue => e
+    $stderr.puts "[TrImporter] fetch_latest_trade_date: #{e.message}"
+    nil
   end
 
   # ── Push selon le type ────────────────────────────────────────────────────

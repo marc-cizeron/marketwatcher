@@ -228,11 +228,12 @@ class MarketwatchApp < Sinatra::Base
           end
           IMPORT_JOBS_MUTEX.synchronize do
             IMPORT_JOBS[job_id].merge!(
-              status:   'done',
-              phase:    'terminé',
-              ok:       result.ok,
-              errors:   result.errors,
-              skipped:  result.skipped,
+              status:       'done',
+              phase:        'terminé',
+              ok:           result.ok,
+              errors:       result.errors,
+              skipped:      result.skipped,
+              trade_cutoff: result.trade_cutoff&.to_s,
               progress: result.rows.size,
               total:    result.rows.size,
               rows:     result.rows.map { |r|

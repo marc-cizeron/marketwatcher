@@ -295,8 +295,16 @@
       errorsHtml += '</div>';
     }
 
+    // Cutoff trades
+    var cutoffHtml = '';
+    if (job.trade_cutoff) {
+      cutoffHtml = '<div style="background:#0c4a6e;border:1px solid #0369a1;border-radius:0.5rem;padding:0.6rem 1rem;margin-bottom:1rem;font-size:0.85rem;color:#38bdf8">' +
+        '📅 Trades filtrés à partir du <strong>' + job.trade_cutoff + '</strong> (date du dernier trade dans SUR)' +
+        '</div>';
+    }
+
     // Titre
-    var skipNote = job.skipped > 0 ? ' <span style="font-size:0.85rem;font-weight:400;color:#64748b">(' + job.skipped + ' déjà présentes, ignorées)</span>' : '';
+    var skipNote = job.skipped > 0 ? ' <span style="font-size:0.85rem;font-weight:400;color:#64748b">(' + job.skipped + ' transactions déjà présentes)</span>' : '';
     var title = 'Résultat — ' + job.ok + ' importées, ' + job.errors + ' erreurs' + skipNote;
 
     // Table
@@ -322,7 +330,7 @@
     });
     tableHtml += '</tbody></table>';
 
-    html = '<div class="card"><h2 style="margin-bottom:1rem">' + title + '</h2>' + errorsHtml + statsHtml + tableHtml + '</div>';
+    html = '<div class="card"><h2 style="margin-bottom:1rem">' + title + '</h2>' + cutoffHtml + errorsHtml + statsHtml + tableHtml + '</div>';
     document.getElementById('results-section').innerHTML = html;
   }
 
