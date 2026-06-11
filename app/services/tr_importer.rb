@@ -219,7 +219,7 @@ class TrImporter
         kind:           :trade,
         trade_type:     'sell',
         ticker:         ticker,
-        qty:            -(shares.abs.round(8)),  # négatif = vente
+        qty:            shares.abs.round(8),  # toujours positif, type="sell" indique la direction
         price:          price,
         fee:            fee.abs,
         currency:       currency.empty? ? 'EUR' : currency,
@@ -465,11 +465,15 @@ class TrImporter
   end
 
   def push_transaction(t)
+    # SUR utilise la convention comptable inversée :
+    #   amount négatif = entrée d'argent (revenu, dépôt, dividende)
+    #   amount positif = sortie d'argent (dépense, taxe, frais)
+    # On inverse donc le signe du CSV avant envoi.
     payload = {
       transaction: {
         account_id:  t[:account_id],
         date:        t[:date],
-        amount:      t[:amount],
+        amount:      -t[:amount],
         name:        t[:name],
         notes:       t[:notes],
         external_id: t[:external_id],
