@@ -252,19 +252,19 @@ class TrImporter
   # ── Push vers SUR ─────────────────────────────────────────────────────────
 
   def push(t)
+    # SUR n'expose pas POST /accounts/:id/transactions — on passe account_id dans le body
+    url     = '/api/v1/transactions'
     payload = {
       transaction: {
-        date:      t[:date],
-        amount:    t[:amount],
-        name:      t[:name],
-        notes:     t[:notes],
-        tag_names: [t[:tag]].compact
+        account_id: t[:account_id],
+        date:       t[:date],
+        amount:     t[:amount],
+        name:       t[:name],
+        notes:      t[:notes],
+        tag_names:  [t[:tag]].compact
       }
     }
 
-    url = "/api/v1/accounts/#{t[:account_id]}/transactions"
-
-    # Log la première requête pour diagnostiquer le format attendu
     if @first_request
       @first_request = false
       $stdout.puts "[TrImporter] Premier push → POST #{Settings::SURE_API_URL}#{url}"
