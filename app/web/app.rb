@@ -3,7 +3,12 @@ require 'sinatra/reloader'
 require 'json'
 require 'digest'
 require 'cgi'
+require 'securerandom'
 require_relative '../../config/settings'
+
+# Stockage en mémoire des jobs d'import en cours / terminés (max 20)
+IMPORT_JOBS = {}
+IMPORT_JOBS_MUTEX = Mutex.new
 require_relative '../../app/models/analysis'
 require_relative '../../app/models/bet'
 require_relative '../../app/models/position'
@@ -174,6 +179,8 @@ class MarketwatchApp < Sinatra::Base
     erb :import
   end
 
+  # Dry-run : réponse synchrone (rapide, pas d'appel SUR)
+  # Import réel : démarre un job en arrière-plan, retourne un job_id JSON
   post '/import' do
     unless params[:file] && params[:file][:tempfile]
       @error = 'Aucun fichier sélectionné'
@@ -187,17 +194,96 @@ class MarketwatchApp < Sinatra::Base
 
     require_relative '../../app/services/tr_importer'
     importer = TrImporter.new(dry_run: dry_run, from_date: from_date.empty? ? nil : from_date)
-    @result  = importer.import!(csv_content)
-    @dry_run = dry_run
-    erb :import
+
+    if dry_run
+      @result  = importer.import!(csv_content)
+      @dry_run = true
+      erb :import
+    else
+      job_id = SecureRandom.hex(8)
+      IMPORT_JOBS_MUTEX.synchronize do
+        IMPORT_JOBS[job_id] = { status: 'running', phase: 'démarrage', progress: 0, total: 0, ok: 0, errors: 0, skipped: 0 }
+        # Garder seulement les 20 derniers jobs
+        oldest = IMPORT_JOBS.keys.first
+        IMPORT_JOBS.delete(oldest) if IMPORT_JOBS.size > 20
+      end
+
+      Thread.new do
+        begin
+          result = importer.import!(csv_content) do |i, total, row|
+            IMPORT_JOBS_MUTEX.synchronize do
+              j = IMPORT_JOBS[job_id]
+              j[:phase]    = 'import'
+              j[:progress] = i
+              j[:total]    = total
+              j[:ok]      += 1 if row.status == 'ok'
+              j[:errors]  += 1 if row.status == 'error'
+            end
+          end
+          IMPORT_JOBS_MUTEX.synchronize do
+            IMPORT_JOBS[job_id].merge!(
+              status:   'done',
+              phase:    'terminé',
+              ok:       result.ok,
+              errors:   result.errors,
+              skipped:  result.skipped,
+              progress: result.rows.size,
+              total:    result.rows.size,
+              rows:     result.rows.map { |r|
+                { date: r.date, account: r.account, amount: r.amount,
+                  name: r.name, tag: r.tag, status: r.status, error: r.error }
+              }
+            )
+          end
+        rescue => e
+          IMPORT_JOBS_MUTEX.synchronize do
+            IMPORT_JOBS[job_id].merge!(status: 'error', phase: 'erreur', message: e.message)
+          end
+        end
+      end
+
+      content_type :json
+      { job_id: job_id }.to_json
+    end
   rescue CSV::MalformedCSVError => e
-    @error  = "CSV invalide : #{e.message}"
-    @result = nil
-    erb :import
+    if params[:dry_run] == 'false'
+      content_type :json
+      halt 400, { error: "CSV invalide : #{e.message}" }.to_json
+    else
+      @error = "CSV invalide : #{e.message}"; @result = nil; erb :import
+    end
   rescue => e
-    @error  = "Erreur : #{e.message}"
-    @result = nil
-    erb :import
+    if params[:dry_run] == 'false'
+      content_type :json
+      halt 500, { error: e.message }.to_json
+    else
+      @error = "Erreur : #{e.message}"; @result = nil; erb :import
+    end
+  end
+
+  # Polling statut d'un job d'import
+  get '/import/status/:job_id' do
+    job = IMPORT_JOBS_MUTEX.synchronize { IMPORT_JOBS[params[:job_id]]&.dup }
+    halt 404, { error: 'Job introuvable' }.to_json unless job
+    content_type :json
+    job.to_json
+  end
+
+  # Découverte des comptes SUR (pour diagnostiquer les 404)
+  get '/import/discover' do
+    require 'faraday'
+    client = Faraday.new(url: Settings::SURE_API_URL) do |f|
+      f.options.timeout = 10; f.options.open_timeout = 5
+    end
+    resp = client.get('/api/v1/accounts') do |req|
+      req.headers['X-Api-Key'] = Settings::SURE_API_KEY
+      req.headers['Accept']    = 'application/json'
+    end
+    content_type :json
+    resp.body
+  rescue => e
+    content_type :json
+    { error: e.message }.to_json
   end
 
   post '/trigger' do

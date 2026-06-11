@@ -42,7 +42,8 @@ class TrImporter
     end
   end
 
-  def import!(csv_content)
+  # on_progress : appelé après chaque transaction avec (index, total, row)
+  def import!(csv_content, &on_progress)
     csv_rows = CSV.parse(csv_content, headers: true, quote_char: '"')
     all_txns = csv_rows.flat_map { |r| map_row(r) }
 
@@ -56,11 +57,12 @@ class TrImporter
 
     new_txns      = all_txns.reject { |t| existing_ids.include?(t[:tr_id]) }
     skipped_count = all_txns.size - new_txns.size
+    total         = new_txns.size
 
     result_rows = []
     ok = errors = 0
 
-    new_txns.each do |t|
+    new_txns.each_with_index do |t, i|
       row = Row.new(
         date:    t[:date],
         account: t[:account_label],
@@ -79,13 +81,14 @@ class TrImporter
           ok += 1
         else
           row.status = 'error'
-          row.error  = "HTTP #{code}: #{body.to_s[0..120]}"
+          row.error  = "HTTP #{code}: #{body.to_s[0..200]}"
           errors += 1
         end
-        sleep 0.1
+        sleep 0.05
       end
 
       result_rows << row
+      on_progress.call(i + 1, total, row) if block_given?
     end
 
     Result.new(ok: ok, errors: errors, skipped: skipped_count, rows: result_rows)

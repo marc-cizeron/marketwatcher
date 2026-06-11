@@ -1,10 +1,11 @@
 <h1>Import Trade Republic</h1>
 
-<div class="card">
+<!-- ── Formulaire upload ───────────────────────────────────────── -->
+<div class="card" id="upload-card">
   <h2>Importer un CSV Trade Republic</h2>
   <p style="color:#94a3b8;font-size:0.875rem;margin-bottom:1rem">
-    Exportez vos transactions depuis l'app Trade Republic → <em>Profil → Documents → Exportation de transactions</em>.
-    Chaque ligne CSV peut générer plusieurs transactions SUR (principal, frais de courtage, taxes séparément).
+    Exportez depuis l'app TR → <em>Profil → Documents → Exportation de transactions</em>.
+    Chaque ligne CSV peut générer plusieurs transactions SUR (principal, frais, taxes séparément).
   </p>
 
   <% if defined?(@error) && @error %>
@@ -13,15 +14,15 @@
     </div>
   <% end %>
 
-  <form method="post" action="/import" enctype="multipart/form-data">
+  <form id="import-form" method="post" action="/import" enctype="multipart/form-data">
     <div class="grid grid-2" style="gap:1rem">
       <div>
         <label>Fichier CSV</label>
-        <input type="file" name="file" accept=".csv" required>
+        <input type="file" name="file" id="file-input" accept=".csv" required>
       </div>
       <div>
         <label>Importer à partir du (optionnel)</label>
-        <input type="date" name="from_date" value="<%= params[:from_date] %>">
+        <input type="date" name="from_date" id="from-date" value="<%= params[:from_date] %>">
       </div>
     </div>
 
@@ -29,128 +30,299 @@
       <button class="btn btn-primary" type="submit" name="dry_run" value="true">
         Aperçu (dry-run)
       </button>
-      <button class="btn" style="background:#065f46;color:#6ee7b7" type="submit" name="dry_run" value="false">
+      <button class="btn" style="background:#065f46;color:#6ee7b7" type="button" id="import-btn">
         Importer réellement
       </button>
       <span style="color:#64748b;font-size:0.8rem">L'aperçu ne fait rien — il simule le résultat.</span>
+      <button class="btn" style="background:#1e293b;color:#94a3b8;margin-left:auto" type="button" id="discover-btn">
+        🔍 Vérifier comptes SUR
+      </button>
     </div>
   </form>
+
+  <!-- Résultat discover -->
+  <div id="discover-result" style="display:none;margin-top:1rem;background:#0f172a;border:1px solid #334155;border-radius:0.5rem;padding:1rem">
+    <div style="font-size:0.75rem;color:#64748b;margin-bottom:0.5rem">Comptes SUR détectés</div>
+    <pre id="discover-json" style="font-size:0.75rem;color:#94a3b8;overflow:auto;max-height:200px"></pre>
+  </div>
 </div>
 
+<!-- ── Progress bar (import réel) ─────────────────────────────── -->
+<div class="card" id="progress-card" style="display:none">
+  <h2 id="progress-title">Import en cours…</h2>
+
+  <div style="margin:1.5rem 0">
+    <div style="display:flex;justify-content:space-between;margin-bottom:0.5rem">
+      <span id="progress-label" style="font-size:0.875rem;color:#94a3b8">Démarrage…</span>
+      <span id="progress-pct" style="font-size:0.875rem;font-weight:600;color:#38bdf8">0%</span>
+    </div>
+    <div style="background:#1e293b;border-radius:9999px;height:10px;overflow:hidden">
+      <div id="progress-bar" style="background:#0369a1;height:100%;width:0%;transition:width 0.3s ease;border-radius:9999px"></div>
+    </div>
+    <div style="display:flex;gap:2rem;margin-top:1rem">
+      <div class="stat">
+        <div class="stat-value" id="p-ok" style="color:#4ade80">0</div>
+        <div class="stat-label">Importées</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="p-errors" style="color:#f87171">0</div>
+        <div class="stat-label">Erreurs</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="p-skip" style="color:#64748b">0</div>
+        <div class="stat-label">Déjà présentes</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="p-total" style="color:#94a3b8">—</div>
+        <div class="stat-label">Total</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Résultats (dry-run server-side OU import JS) ───────────── -->
+<div id="results-section">
 <% if @result %>
   <% rows = @result.rows %>
-
-  <%# Grouper par tag pour les stats %>
   <% by_tag = rows.group_by(&:tag) %>
-  <% tags_order = %w[Investissement Dividende Dépôt Retrait Intérêts Frais\ de\ courtage Taxes Frais Virement\ interne Autre] %>
 
   <div class="card">
     <h2 style="margin-bottom:1rem">
-      <% if @dry_run %>
-        Aperçu — <%= rows.size %> nouvelles transactions
-        <% if @result.skipped > 0 %>
-          <span style="font-size:0.85rem;font-weight:400;color:#64748b;margin-left:0.5rem">
-            (<%= @result.skipped %> déjà importées, ignorées)
-          </span>
-        <% end %>
-      <% else %>
-        Résultat — <%= @result.ok %> importées, <%= @result.errors %> erreurs
-        <% if @result.skipped > 0 %>
-          <span style="font-size:0.85rem;font-weight:400;color:#64748b;margin-left:0.5rem">
-            (<%= @result.skipped %> déjà présentes, ignorées)
-          </span>
-        <% end %>
+      Aperçu — <%= rows.size %> nouvelles transactions
+      <% if @result.skipped > 0 %>
+        <span style="font-size:0.85rem;font-weight:400;color:#64748b;margin-left:0.5rem">
+          (<%= @result.skipped %> déjà importées, ignorées)
+        </span>
       <% end %>
     </h2>
 
-    <%# Stats par catégorie %>
     <div style="display:flex;flex-wrap:wrap;gap:0.75rem;margin-bottom:1.5rem">
-      <% by_tag.sort_by { |tag, _| tags_order.index(tag) || 99 }.each do |tag, tag_rows| %>
-        <% total_amount = tag_rows.sum(&:amount).round(2) %>
-        <div style="background:#0f172a;border:1px solid #334155;border-radius:0.5rem;padding:0.5rem 0.875rem;min-width:140px">
+      <% by_tag.sort_by { |tag, _| ['Investissement','Dividende','Dépôt','Retrait','Intérêts','Frais de courtage','Taxes','Frais','Virement interne','Autre'].index(tag) || 99 }.each do |tag, tag_rows| %>
+        <% tot = tag_rows.sum(&:amount).round(2) %>
+        <div style="background:#0f172a;border:1px solid #334155;border-radius:0.5rem;padding:0.5rem 0.875rem;min-width:130px">
           <div style="font-size:0.75rem;color:#64748b;margin-bottom:0.25rem"><%= tag %></div>
-          <div style="font-size:0.9rem;font-weight:600;color:<%= total_amount >= 0 ? '#4ade80' : '#f87171' %>">
-            <%= total_amount >= 0 ? '+' : '' %><%= total_amount %>€
-          </div>
+          <div style="font-size:0.9rem;font-weight:600;color:<%= tot >= 0 ? '#4ade80' : '#f87171' %>"><%= tot >= 0 ? '+' : '' %><%= tot %>€</div>
           <div style="font-size:0.75rem;color:#475569"><%= tag_rows.size %> ligne<%= tag_rows.size > 1 ? 's' : '' %></div>
         </div>
       <% end %>
     </div>
 
-    <% if rows.empty? %>
-      <p style="color:#64748b;font-size:0.875rem">Aucune transaction correspondant aux critères.</p>
-    <% else %>
-      <table>
-        <thead>
+    <table>
+      <thead><tr><th>Date</th><th>Compte</th><th>Montant</th><th>Catégorie</th><th>Libellé</th></tr></thead>
+      <tbody>
+        <% rows.each do |row| %>
+          <% tag_color = {'Investissement'=>'badge-blue','Dividende'=>'badge-green','Dépôt'=>'badge-green','Taxes'=>'badge-red','Frais de courtage'=>'badge-red','Frais'=>'badge-red','Retrait'=>'badge-yellow'}[row.tag] || 'badge-gray' %>
           <tr>
-            <th>Date</th>
-            <th>Compte</th>
-            <th>Montant</th>
-            <th>Catégorie</th>
-            <th>Libellé</th>
-            <% unless @dry_run %><th>Statut</th><% end %>
+            <td style="color:#94a3b8;white-space:nowrap"><%= row.date %></td>
+            <td><span class="badge <%= row.account == 'PEA' ? 'badge-blue' : 'badge-gray' %>"><%= row.account %></span></td>
+            <td class="<%= row.amount >= 0 ? 'positive' : 'negative' %>" style="white-space:nowrap"><%= row.amount >= 0 ? '+' : '' %><%= row.amount.round(2) %>€</td>
+            <td><span class="badge <%= tag_color %>"><%= row.tag %></span></td>
+            <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="<%= row.notes %>"><%= row.name %></td>
           </tr>
-        </thead>
-        <tbody>
-          <% rows.each do |row| %>
-            <tr>
-              <td style="color:#94a3b8;white-space:nowrap"><%= row.date %></td>
-              <td>
-                <span class="badge <%= row.account == 'PEA' ? 'badge-blue' : 'badge-gray' %>">
-                  <%= row.account %>
-                </span>
-              </td>
-              <td class="<%= row.amount >= 0 ? 'positive' : 'negative' %>" style="white-space:nowrap">
-                <%= row.amount >= 0 ? '+' : '' %><%= row.amount.round(2) %>€
-              </td>
-              <td>
-                <%
-                  tag_color = case row.tag
-                  when 'Investissement' then 'badge-blue'
-                  when 'Dividende'      then 'badge-green'
-                  when 'Dépôt'          then 'badge-green'
-                  when 'Taxes', 'Frais de courtage', 'Frais' then 'badge-red'
-                  when 'Retrait'        then 'badge-yellow'
-                  else 'badge-gray'
-                  end
-                %>
-                <span class="badge <%= tag_color %>"><%= row.tag %></span>
-              </td>
-              <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="<%= row.notes %>">
-                <%= row.name %>
-              </td>
-              <% unless @dry_run %>
-                <td>
-                  <% if row.status == 'ok' %>
-                    <span class="badge badge-green">✓</span>
-                  <% else %>
-                    <span class="badge badge-red" title="<%= row.error %>">✗</span>
-                  <% end %>
-                </td>
-              <% end %>
-            </tr>
-          <% end %>
-        </tbody>
-      </table>
-    <% end %>
+        <% end %>
+      </tbody>
+    </table>
   </div>
 
-  <% if @dry_run && rows.size > 0 %>
+  <% if rows.size > 0 %>
     <div class="card" style="border-color:#0369a1">
       <h2>Confirmer l'import</h2>
       <p style="color:#94a3b8;font-size:0.875rem;margin-bottom:1rem">
-        <%= rows.size %> transactions seront envoyées vers SUR.
-        Cette opération ne vérifie pas les doublons — n'importez pas deux fois le même fichier.
+        <%= rows.size %> transactions seront envoyées vers SUR. Import idempotent — relancer le même fichier ne crée pas de doublons.
       </p>
-      <form method="post" action="/import" enctype="multipart/form-data">
-        <input type="hidden" name="dry_run" value="false">
+      <form id="confirm-form" method="post" action="/import" enctype="multipart/form-data">
         <input type="hidden" name="from_date" value="<%= params[:from_date] %>">
-        <label>Re-sélectionnez le fichier CSV pour confirmer</label>
-        <input type="file" name="file" accept=".csv" required style="margin-bottom:1rem">
-        <button class="btn" style="background:#065f46;color:#6ee7b7" type="submit">
+        <label>Re-sélectionnez le fichier CSV</label>
+        <input type="file" name="file" id="confirm-file" accept=".csv" required style="margin-bottom:1rem">
+        <button class="btn" style="background:#065f46;color:#6ee7b7" type="button" id="confirm-btn">
           Confirmer l'import (<%= rows.size %> transactions)
         </button>
       </form>
     </div>
   <% end %>
 <% end %>
+</div>
+
+<!-- ── Scripts ────────────────────────────────────────────────── -->
+<script>
+(function() {
+  // ── Discover ────────────────────────────────────────────────
+  document.getElementById('discover-btn').addEventListener('click', function() {
+    var btn = this;
+    btn.textContent = '⏳ Chargement…';
+    btn.disabled = true;
+    fetch('/import/discover')
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        document.getElementById('discover-result').style.display = 'block';
+        document.getElementById('discover-json').textContent = JSON.stringify(data, null, 2);
+        btn.textContent = '🔍 Vérifier comptes SUR';
+        btn.disabled = false;
+      })
+      .catch(function(e) {
+        document.getElementById('discover-result').style.display = 'block';
+        document.getElementById('discover-json').textContent = 'Erreur: ' + e.message;
+        btn.textContent = '🔍 Vérifier comptes SUR';
+        btn.disabled = false;
+      });
+  });
+
+  // ── Import réel (bouton principal) ───────────────────────────
+  function startImport(fileInput, fromDate) {
+    if (!fileInput || !fileInput.files[0]) {
+      alert('Sélectionnez un fichier CSV');
+      return;
+    }
+    var formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+    formData.append('dry_run', 'false');
+    formData.append('from_date', fromDate || '');
+
+    document.getElementById('upload-card').style.display = 'none';
+    document.getElementById('results-section').innerHTML = '';
+    document.getElementById('progress-card').style.display = 'block';
+
+    fetch('/import', { method: 'POST', body: formData })
+      .then(function(r) {
+        if (!r.ok) return r.json().then(function(d) { throw new Error(d.error || 'Erreur serveur'); });
+        return r.json();
+      })
+      .then(function(data) {
+        if (data.job_id) {
+          pollJob(data.job_id);
+        } else {
+          showFatalError(data.error || 'Réponse inattendue');
+        }
+      })
+      .catch(function(e) { showFatalError(e.message); });
+  }
+
+  document.getElementById('import-btn').addEventListener('click', function() {
+    startImport(
+      document.getElementById('file-input'),
+      document.getElementById('from-date').value
+    );
+  });
+
+  // ── Bouton confirmation après dry-run ────────────────────────
+  var confirmBtn = document.getElementById('confirm-btn');
+  if (confirmBtn) {
+    confirmBtn.addEventListener('click', function() {
+      startImport(
+        document.getElementById('confirm-file'),
+        '<%= params[:from_date] %>'
+      );
+    });
+  }
+
+  // ── Polling ──────────────────────────────────────────────────
+  function pollJob(jobId) {
+    var interval = setInterval(function() {
+      fetch('/import/status/' + jobId)
+        .then(function(r) { return r.json(); })
+        .then(function(job) {
+          updateProgress(job);
+          if (job.status === 'done' || job.status === 'error') {
+            clearInterval(interval);
+            showResult(job);
+          }
+        })
+        .catch(function() { /* ignore */ });
+    }, 400);
+  }
+
+  function updateProgress(job) {
+    var total = job.total || 0;
+    var prog  = job.progress || 0;
+    var pct   = total > 0 ? Math.round((prog / total) * 100) : 0;
+
+    document.getElementById('progress-bar').style.width = pct + '%';
+    document.getElementById('progress-pct').textContent = pct + '%';
+    document.getElementById('p-ok').textContent     = job.ok     || 0;
+    document.getElementById('p-errors').textContent = job.errors || 0;
+    document.getElementById('p-skip').textContent   = job.skipped || 0;
+    document.getElementById('p-total').textContent  = total || '—';
+
+    var label = '';
+    if (job.phase === 'démarrage')      label = 'Vérification des doublons…';
+    else if (job.phase === 'import')    label = prog + ' / ' + total + ' transactions traitées';
+    else if (job.phase === 'terminé')   label = 'Import terminé';
+    else if (job.phase === 'erreur')    label = 'Erreur';
+    document.getElementById('progress-label').textContent = label;
+  }
+
+  function showResult(job) {
+    document.getElementById('progress-card').style.display = 'none';
+    var html = '';
+
+    if (job.status === 'error') {
+      html = '<div class="card" style="border-color:#7f1d1d"><h2 style="color:#f87171">Erreur d\'import</h2><p style="color:#94a3b8;margin-top:0.5rem">' + escHtml(job.message) + '</p></div>';
+      document.getElementById('results-section').innerHTML = html;
+      document.getElementById('upload-card').style.display = 'block';
+      return;
+    }
+
+    // Stats par tag
+    var byTag = {};
+    (job.rows || []).forEach(function(r) {
+      if (!byTag[r.tag]) byTag[r.tag] = { count: 0, total: 0 };
+      byTag[r.tag].count++;
+      byTag[r.tag].total += r.amount;
+    });
+
+    var statsHtml = '<div style="display:flex;flex-wrap:wrap;gap:0.75rem;margin-bottom:1.5rem">';
+    Object.keys(byTag).forEach(function(tag) {
+      var t = byTag[tag];
+      var tot = Math.round(t.total * 100) / 100;
+      var color = tot >= 0 ? '#4ade80' : '#f87171';
+      statsHtml += '<div style="background:#0f172a;border:1px solid #334155;border-radius:0.5rem;padding:0.5rem 0.875rem;min-width:130px">' +
+        '<div style="font-size:0.75rem;color:#64748b;margin-bottom:0.25rem">' + escHtml(tag) + '</div>' +
+        '<div style="font-size:0.9rem;font-weight:600;color:' + color + '">' + (tot >= 0 ? '+' : '') + tot + '€</div>' +
+        '<div style="font-size:0.75rem;color:#475569">' + t.count + ' ligne' + (t.count > 1 ? 's' : '') + '</div>' +
+        '</div>';
+    });
+    statsHtml += '</div>';
+
+    // Titre
+    var skipNote = job.skipped > 0 ? ' <span style="font-size:0.85rem;font-weight:400;color:#64748b">(' + job.skipped + ' déjà présentes, ignorées)</span>' : '';
+    var title = 'Résultat — ' + job.ok + ' importées, ' + job.errors + ' erreurs' + skipNote;
+
+    // Table
+    var tableHtml = '<table><thead><tr><th>Date</th><th>Compte</th><th>Montant</th><th>Catégorie</th><th>Libellé</th><th>Statut</th></tr></thead><tbody>';
+    (job.rows || []).forEach(function(r) {
+      var amtColor = r.amount >= 0 ? '#4ade80' : '#f87171';
+      var amtStr   = (r.amount >= 0 ? '+' : '') + (Math.round(r.amount * 100) / 100) + '€';
+      var accBadge = r.account === 'PEA'
+        ? '<span class="badge badge-blue">PEA</span>'
+        : '<span class="badge badge-gray">DEFAULT</span>';
+      var tagColor = {Investissement:'badge-blue', Dividende:'badge-green', Dépôt:'badge-green', Taxes:'badge-red', 'Frais de courtage':'badge-red', Frais:'badge-red', Retrait:'badge-yellow'}[r.tag] || 'badge-gray';
+      var statusBadge = r.status === 'ok'
+        ? '<span class="badge badge-green">✓</span>'
+        : '<span class="badge badge-red" title="' + escHtml(r.error || '') + '">✗ ' + escHtml((r.error || '').substring(0, 40)) + '</span>';
+      tableHtml += '<tr>' +
+        '<td style="color:#94a3b8;white-space:nowrap">' + escHtml(r.date) + '</td>' +
+        '<td>' + accBadge + '</td>' +
+        '<td style="color:' + amtColor + ';white-space:nowrap">' + amtStr + '</td>' +
+        '<td><span class="badge ' + tagColor + '">' + escHtml(r.tag) + '</span></td>' +
+        '<td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + escHtml(r.name) + '">' + escHtml(r.name) + '</td>' +
+        '<td>' + statusBadge + '</td>' +
+        '</tr>';
+    });
+    tableHtml += '</tbody></table>';
+
+    html = '<div class="card"><h2 style="margin-bottom:1rem">' + title + '</h2>' + statsHtml + tableHtml + '</div>';
+    document.getElementById('results-section').innerHTML = html;
+  }
+
+  function showFatalError(msg) {
+    document.getElementById('progress-card').style.display = 'none';
+    document.getElementById('upload-card').style.display = 'block';
+    document.getElementById('results-section').innerHTML =
+      '<div class="card" style="border-color:#7f1d1d"><p style="color:#f87171">' + escHtml(msg) + '</p></div>';
+  }
+
+  function escHtml(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+})();
+</script>
