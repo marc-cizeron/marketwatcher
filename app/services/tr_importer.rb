@@ -61,19 +61,6 @@ class TrImporter
     # 'DE000SQ4SUR5' => nil,
   }.freeze
 
-  # Correspondance tag interne → investment_activity_label SUR
-  TAG_TO_ACTIVITY = {
-    'Dividende'         => 'Dividend',
-    'Taxes'             => 'Fee',
-    'Intérêts'          => 'Interest',
-    'Dépôt'             => 'Contribution',
-    'Frais'             => 'Fee',
-    'Frais de courtage' => 'Fee',
-    'Retrait'           => 'Withdrawal',
-    'Virement interne'  => 'Transfer',
-    'Autre'             => 'Other',
-  }.freeze
-
   SKIP_TYPES = %w[
     MIGRATION
     BONUS_ISSUE
@@ -557,20 +544,19 @@ class TrImporter
   end
 
   def push_transaction(t)
-    # SUR utilise la convention comptable inversée :
-    #   amount négatif = entrée d'argent (revenu, dépôt, dividende)
-    #   amount positif = sortie d'argent (dépense, taxe, frais)
-    # On inverse donc le signe du CSV avant envoi.
+    # SUR convention : amount négatif = entrée (revenu/dépôt), positif = sortie (taxe/frais).
+    # Note : investment_activity_label n'est PAS dans les permitted params de l'API transactions
+    # (uniquement pour les trades). Le "Type d'activité" des transactions ne peut pas être
+    # défini via API — limitation SUR.
     payload = {
       transaction: {
-        account_id:                t[:account_id],
-        date:                      t[:date],
-        amount:                    -t[:amount],
-        name:                      t[:name],
-        notes:                     t[:notes],
-        external_id:               t[:external_id],
-        source:                    'trade_republic',
-        investment_activity_label: TAG_TO_ACTIVITY[t[:tag]]
+        account_id:  t[:account_id],
+        date:        t[:date],
+        amount:      -t[:amount],
+        name:        t[:name],
+        notes:       t[:notes],
+        external_id: t[:external_id],
+        source:      'trade_republic'
       }
     }
 
@@ -594,39 +580,9 @@ class TrImporter
       $stdout.flush
     end
 
-    # Transaction déjà présente (200) → PATCH pour mettre à jour le label d'activité.
-    # On PATCH systématiquement : SUR ne met pas à jour les champs lors d'un POST idempotent.
-    if resp.status == 200 && parsed.is_a?(Hash)
-      label  = TAG_TO_ACTIVITY[t[:tag]]
-      # Réponse peut être plate {id:...} ou imbriquée {transaction:{id:...}}
-      txn    = parsed.key?('id') ? parsed : (parsed['transaction'] || parsed['entry'] || {})
-      txn_id = txn['id']
-      if txn_id && label
-        patch_transaction_label(txn_id, label)
-      else
-        $stdout.puts "[TrImporter] PATCH skipped — txn_id=#{txn_id.inspect} label=#{label.inspect} keys=#{parsed.keys.inspect}"
-        $stdout.flush
-      end
-    end
-
     [resp.status, parsed]
   rescue => e
     $stdout.puts "[TrImporter] TXN EXCEPTION: #{e.message}"; $stdout.flush
     [0, e.message]
-  end
-
-  def patch_transaction_label(id, label)
-    resp = @client.patch("/api/v1/transactions/#{id}") do |req|
-      req.headers['X-Api-Key']    = Settings::SURE_API_KEY
-      req.headers['Content-Type'] = 'application/json'
-      req.headers['Accept']       = 'application/json'
-      req.body = { transaction: { investment_activity_label: label } }.to_json
-    end
-    unless resp.status == 200
-      $stdout.puts "[TrImporter] PATCH label HTTP #{resp.status} — id=#{id} label=#{label} — #{resp.body[0..200]}"
-      $stdout.flush
-    end
-  rescue => e
-    $stderr.puts "[TrImporter] PATCH label exception: #{e.message}"
   end
 end
