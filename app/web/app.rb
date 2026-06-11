@@ -276,6 +276,26 @@ class MarketwatchApp < Sinatra::Base
     job.to_json
   end
 
+  # Sauvegarde d'une correspondance ISIN → ticker
+  post '/import/tickers' do
+    require_relative '../../app/models/ticker_mapping'
+    isin   = params[:isin].to_s.strip
+    ticker = params[:ticker].to_s.strip.upcase
+    name   = params[:name].to_s.strip
+    halt 400 if isin.empty?
+
+    m = TickerMapping.where(isin: isin).first
+    if m
+      m.update(ticker: ticker.empty? ? nil : ticker, updated_at: Time.now)
+    else
+      TickerMapping.create(isin: isin, name: name,
+                           ticker: ticker.empty? ? nil : ticker,
+                           created_at: Time.now, updated_at: Time.now)
+    end
+    content_type :json
+    { ok: true, isin: isin, ticker: ticker }.to_json
+  end
+
   # Découverte des comptes SUR (pour diagnostiquer les 404)
   get '/import/discover' do
     require 'faraday'

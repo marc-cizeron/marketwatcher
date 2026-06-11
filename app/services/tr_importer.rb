@@ -3,27 +3,25 @@ require 'csv'
 require 'json'
 require 'date'
 require_relative '../../config/settings'
+require_relative '../models/ticker_mapping'
 
 # Synchronisation CSV Trade Republic → API SUR.
 #
 # Deux types d'entrées selon la nature de l'opération :
 #
 #   :trade       → POST /api/v1/trades  (BUY/SELL — met à jour les holdings)
-#                  Champs : account_id, date, ticker, qty (+achat/-vente), price, fee, currency
-#
 #   :transaction → POST /api/v1/transactions  (dividendes, dépôts, intérêts, frais, taxes)
-#                  Champs : account_id, date, amount, name, notes, external_id, source
 #
-# Idempotence :
-#   - :transaction → external_id + source natifs de SUR (201=créée, 200=déjà là)
-#   - :trade       → pas d'external_id SUR ; ne pas importer deux fois le même CSV
+# Les correspondances ISIN → ticker Yahoo Finance sont stockées en base
+# (table ticker_mappings). Les ISINs inconnus sont remontés dans Result#unmapped
+# pour que l'utilisateur puisse les mapper avant d'importer.
 class TrImporter
   ACCOUNTS = {
     'DEFAULT' => Settings::SURE_ACCOUNT_DEFAULT,
     'PEA'     => Settings::SURE_ACCOUNT_PEA
   }.freeze
 
-  # ISIN → ticker Yahoo Finance (utilisé pour les trades)
+  # Fallback statique si la DB n'est pas disponible
   TICKER_MAP = {
     # Actions françaises
     'FR0000120271' => 'TTE.PA',
@@ -73,7 +71,7 @@ class TrImporter
     PEA_MARKETING
   ].freeze
 
-  Result = Struct.new(:ok, :errors, :skipped, :rows, :trade_cutoff, keyword_init: true)
+  Result = Struct.new(:ok, :errors, :skipped, :rows, :trade_cutoff, :unmapped, keyword_init: true)
   Row    = Struct.new(:kind, :date, :account, :amount, :name, :tag, :status, :error, keyword_init: true)
 
   def initialize(dry_run: true, from_date: nil)
@@ -81,6 +79,7 @@ class TrImporter
     @from_date     = from_date.is_a?(String) && !from_date.empty? ? Date.parse(from_date) : from_date
     @first_trade   = true
     @first_txn     = true
+    @ticker_map    = load_ticker_map
     @client        = Faraday.new(url: Settings::SURE_API_URL) do |f|
       f.options.timeout      = 30
       f.options.open_timeout = 10
@@ -88,8 +87,19 @@ class TrImporter
   end
 
   def import!(csv_content, &on_progress)
-    csv_rows = CSV.parse(csv_content, headers: true, quote_char: '"')
-    all_items = csv_rows.flat_map { |r| map_row(r) }
+    csv_rows  = CSV.parse(csv_content, headers: true, quote_char: '"')
+    all_items = []
+    unmapped  = {}   # isin => name (dédupliqué)
+
+    csv_rows.each do |r|
+      map_row(r).each do |item|
+        if item[:kind] == :unmapped
+          unmapped[item[:isin]] ||= item[:name]
+        else
+          all_items << item
+        end
+      end
+    end
 
     if @from_date
       all_items.select! { |t| Date.parse(t[:date]) >= @from_date }
@@ -139,7 +149,9 @@ class TrImporter
       on_progress.call(i + 1, total, row) if block_given?
     end
 
-    Result.new(ok: ok, errors: errors, skipped: skipped, rows: result_rows, trade_cutoff: trade_cutoff)
+    unmapped_list = unmapped.map { |isin, name| { isin: isin, name: name } }
+    Result.new(ok: ok, errors: errors, skipped: skipped, rows: result_rows,
+               trade_cutoff: trade_cutoff, unmapped: unmapped_list)
   end
 
   private
@@ -173,8 +185,9 @@ class TrImporter
 
     # ── Achats → trade (fee inclus) + TTF en transaction séparée ────────────
     when 'BUY'
-      ticker = TICKER_MAP[symbol]
-      return [] unless ticker  # produit sans ticker Yahoo connu → ignoré
+      ticker = @ticker_map[symbol]
+      return [{ kind: :unmapped, isin: symbol, name: name_asset }] if ticker.nil? && !@ticker_map.key?(symbol)
+      return [] if ticker.nil?  # ticker NULL en base = produit ignoré volontairement
       items << base.merge(
         kind:           :trade,
         trade_type:     'buy',
@@ -199,8 +212,9 @@ class TrImporter
 
     # ── Ventes → trade (fee inclus) + impôt éventuel ────────────────────────
     when 'SELL'
-      ticker = TICKER_MAP[symbol]
-      return [] unless ticker  # produit sans ticker Yahoo connu → ignoré
+      ticker = @ticker_map[symbol]
+      return [{ kind: :unmapped, isin: symbol, name: name_asset }] if ticker.nil? && !@ticker_map.key?(symbol)
+      return [] if ticker.nil?
       items << base.merge(
         kind:           :trade,
         trade_type:     'sell',
@@ -360,6 +374,15 @@ class TrImporter
     end
 
     items
+  end
+
+  # ── Chargement des correspondances ISIN → ticker ─────────────────────────
+
+  def load_ticker_map
+    TickerMapping.to_map
+  rescue => e
+    $stderr.puts "[TrImporter] Fallback sur TICKER_MAP statique: #{e.message}"
+    TICKER_MAP.dup
   end
 
   # ── Date du dernier trade dans SUR ───────────────────────────────────────

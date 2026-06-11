@@ -83,6 +83,43 @@
 <!-- ── Résultats (dry-run server-side OU import JS) ───────────── -->
 <div id="results-section">
 <% if @result %>
+  <%# ── ISINs non mappés ──────────────────────────────────────────────── %>
+  <% if @result.unmapped&.any? %>
+    <div class="card" style="border-color:#b45309" id="unmapped-card">
+      <h2 style="color:#fbbf24;margin-bottom:0.5rem">
+        ⚠️ <%= @result.unmapped.size %> titre<%= @result.unmapped.size > 1 ? 's' : '' %> sans correspondance Yahoo Finance
+      </h2>
+      <p style="color:#94a3b8;font-size:0.875rem;margin-bottom:1rem">
+        Ces titres ne seront <strong>pas importés</strong> tant qu'ils ne sont pas mappés.
+        Entrez le ticker Yahoo Finance puis cliquez Sauvegarder. Relancez ensuite l'aperçu.
+      </p>
+      <table>
+        <thead><tr><th>ISIN</th><th>Nom</th><th>Ticker Yahoo Finance</th><th></th></tr></thead>
+        <tbody>
+          <% @result.unmapped.each do |u| %>
+            <tr id="unmapped-row-<%= u[:isin] %>">
+              <td style="color:#94a3b8;font-family:monospace"><%= u[:isin] %></td>
+              <td><%= u[:name] %></td>
+              <td>
+                <input type="text" id="ticker-<%= u[:isin] %>"
+                       placeholder="ex: AAPL, TTE.PA, BTC-USD"
+                       style="width:180px"
+                       data-isin="<%= u[:isin] %>"
+                       data-name="<%= u[:name].gsub('"','&quot;') %>">
+              </td>
+              <td>
+                <button class="btn btn-primary btn-sm save-ticker-btn"
+                        data-isin="<%= u[:isin] %>">
+                  Sauvegarder
+                </button>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  <% end %>
+
   <% rows = @result.rows %>
   <% by_tag = rows.group_by(&:tag) %>
 
@@ -344,5 +381,55 @@
   function escHtml(s) {
     return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
+
+  // ── Sauvegarde ticker inline ─────────────────────────────────────────────
+  document.querySelectorAll('.save-ticker-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var isin   = btn.dataset.isin;
+      var input  = document.getElementById('ticker-' + isin);
+      var ticker = input.value.trim().toUpperCase();
+      var name   = input.dataset.name || '';
+      if (!ticker) { input.focus(); return; }
+
+      btn.textContent = '…';
+      btn.disabled = true;
+
+      var body = new URLSearchParams({ isin: isin, ticker: ticker, name: name });
+      fetch('/import/tickers', { method: 'POST', body: body })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.ok) {
+            var row = document.getElementById('unmapped-row-' + isin);
+            row.style.opacity = '0.4';
+            row.style.textDecoration = 'line-through';
+            btn.textContent = '✓ Sauvegardé';
+            input.disabled = true;
+            // Si plus aucune ligne active, masquer la card
+            var remaining = document.querySelectorAll('.save-ticker-btn:not([disabled])');
+            if (remaining.length === 0) {
+              document.getElementById('unmapped-card').style.borderColor = '#16a34a';
+              document.querySelector('#unmapped-card h2').textContent = '✅ Tous les titres mappés — relancez l\'aperçu';
+            }
+          } else {
+            btn.textContent = 'Sauvegarder';
+            btn.disabled = false;
+          }
+        })
+        .catch(function() {
+          btn.textContent = 'Sauvegarder';
+          btn.disabled = false;
+        });
+    });
+  });
+
+  // Entrée clavier sur le champ ticker → déclenche save
+  document.querySelectorAll('input[data-isin]').forEach(function(input) {
+    input.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        var btn = document.querySelector('.save-ticker-btn[data-isin="' + input.dataset.isin + '"]');
+        if (btn) btn.click();
+      }
+    });
+  });
 })();
 </script>
