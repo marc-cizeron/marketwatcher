@@ -217,6 +217,7 @@ class MarketwatchApp < Sinatra::Base
               j[:progress] = i
               j[:total]    = total
               j[:ok]      += 1 if row.status == 'ok'
+              j[:skipped] += 1 if row.status == 'exists'
               if row.status == 'error'
                 j[:errors] += 1
                 if j[:sample_errors].size < 5
