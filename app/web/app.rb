@@ -187,16 +187,18 @@ class MarketwatchApp < Sinatra::Base
   # Dry-run : réponse synchrone (rapide, pas d'appel SUR)
   # Import réel : démarre un job en arrière-plan, retourne un job_id JSON
   post '/import' do
+    source    = params[:source].to_s
+    view_name = source == 'stackinsat' ? :import_btc : :import
+
     unless params[:file] && params[:file][:tempfile]
       @error = 'Aucun fichier sélectionné'
       @result = nil
-      next erb :import
+      next erb view_name
     end
 
     csv_content = params[:file][:tempfile].read.force_encoding('UTF-8')
     dry_run     = params[:dry_run] != 'false'
     from_date   = params[:from_date].to_s.strip
-    source      = params[:source].to_s
 
     if source == 'stackinsat'
       require_relative '../../app/services/stackinsat_importer'
@@ -209,7 +211,7 @@ class MarketwatchApp < Sinatra::Base
     if dry_run
       @result  = importer.import!(csv_content)
       @dry_run = true
-      erb :import
+      erb view_name
     else
       job_id = SecureRandom.hex(8)
       IMPORT_JOBS_MUTEX.synchronize do
@@ -248,7 +250,7 @@ class MarketwatchApp < Sinatra::Base
               progress: result.rows.size,
               total:    result.rows.size,
               rows:     result.rows.map { |r|
-                { date: r.date, account: r.account, amount: r.amount,
+                { kind: r.kind, date: r.date, account: r.account, amount: r.amount,
                   name: r.name, tag: r.tag, status: r.status, error: r.error }
               }
             )
@@ -268,14 +270,18 @@ class MarketwatchApp < Sinatra::Base
       content_type :json
       halt 400, { error: "CSV invalide : #{e.message}" }.to_json
     else
-      @error = "CSV invalide : #{e.message}"; @result = nil; erb :import
+      source    = params[:source].to_s
+      view_name = source == 'stackinsat' ? :import_btc : :import
+      @error = "CSV invalide : #{e.message}"; @result = nil; erb view_name
     end
   rescue => e
     if params[:dry_run] == 'false'
       content_type :json
       halt 500, { error: e.message }.to_json
     else
-      @error = "Erreur : #{e.message}"; @result = nil; erb :import
+      source    = params[:source].to_s
+      view_name = source == 'stackinsat' ? :import_btc : :import
+      @error = "Erreur : #{e.message}"; @result = nil; erb view_name
     end
   end
 
