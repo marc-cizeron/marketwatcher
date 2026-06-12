@@ -188,6 +188,19 @@ class StackinsatImporter
       display_amount: -(amount_btc * price).round(2)
     )
 
+    # Frais de service StackinSat (toujours présent — spread/commission)
+    if fee_eur > 0
+      items << base.merge(
+        kind:           :transaction,
+        external_id:    "#{tx_id}_sf",
+        amount:         fee_eur.round(2),
+        name:           'Frais StackinSat',
+        notes:          nil,
+        tag:            'Frais',
+        display_amount: fee_eur.round(2)
+      )
+    end
+
     # Frais paiement carte (uniquement pour les achats par carte)
     if card_fee > 0
       items << base.merge(
