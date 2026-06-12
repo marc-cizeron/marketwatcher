@@ -47,6 +47,8 @@
     <div style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:center">
       <button class="btn btn-sm" style="background:#422006;color:#fed7aa" type="button"
               id="purge-trades-btn">🗑 Supprimer les trades BTC</button>
+      <button class="btn btn-sm" style="background:#450a0a;color:#fca5a5" type="button"
+              id="purge-txn-btn">🗑 Supprimer les transactions BTC</button>
       <span id="purge-status" style="font-size:0.8rem;color:#64748b"></span>
     </div>
   </div>
@@ -90,9 +92,10 @@
 <% if @result %>
   <% rows = @result.rows %>
 
+  <% trades = rows.select { |r| r.kind == :trade }; txns = rows.select { |r| r.kind == :transaction } %>
   <div class="card">
     <h2 style="margin-bottom:1rem">
-      Aperçu — <%= rows.size %> trades BTC
+      Aperçu — <%= trades.size %> trades + <%= txns.size %> transactions de frais
       <% if @result.skipped > 0 %>
         <span style="font-size:0.85rem;font-weight:400;color:#64748b;margin-left:0.5rem">
           (<%= @result.skipped %> déjà importés, ignorés)
@@ -101,15 +104,20 @@
     </h2>
 
     <table>
-      <thead><tr><th>Date</th><th>BTC reçu</th><th>Prix (€/BTC)</th><th>Montant</th><th>Libellé</th></tr></thead>
+      <thead><tr><th>Date</th><th>Type</th><th>Montant</th><th>Libellé</th></tr></thead>
       <tbody>
         <% rows.each do |row| %>
           <tr>
             <td style="color:#94a3b8;white-space:nowrap"><%= row.date %></td>
-            <td><span class="badge badge-yellow">BTC-USD</span></td>
-            <td style="color:#94a3b8"></td>
-            <td class="negative" style="white-space:nowrap"><%= row.amount&.round(2) %>€</td>
-            <td style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><%= row.name %></td>
+            <td>
+              <% if row.kind == :trade %>
+                <span class="badge badge-yellow">Trade</span>
+              <% else %>
+                <span class="badge badge-red">Frais</span>
+              <% end %>
+            </td>
+            <td class="negative" style="white-space:nowrap"><%= row.amount&.round(4) %>€</td>
+            <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><%= row.name %></td>
           </tr>
         <% end %>
       </tbody>
@@ -140,18 +148,17 @@
 <script>
 (function() {
   // ── Purge ─────────────────────────────────────────────────────
-  document.getElementById('purge-trades-btn').addEventListener('click', function() {
-    var btn = this;
-    if (!confirm('Supprimer TOUS les trades BTC StackinSat dans SUR ?\nCette action est irréversible.')) return;
+  function doPurge(what, label, btn) {
+    if (!confirm('Supprimer ' + label + ' dans SUR ?\nCette action est irréversible.')) return;
     btn.disabled = true;
     var orig = btn.textContent;
     btn.textContent = '⏳ Suppression…';
     document.getElementById('purge-status').textContent = '';
-    var body = new URLSearchParams({ what: 'trades', source: 'stackinsat' });
+    var body = new URLSearchParams({ what: what, source: 'stackinsat' });
     fetch('/import/purge', { method: 'POST', body: body })
       .then(function(r) { return r.json(); })
       .then(function(d) {
-        var res = d.trades || d;
+        var res = d[what] || d;
         document.getElementById('purge-status').textContent =
           '✓ ' + (res.deleted || 0) + ' supprimés' + (res.errors > 0 ? ', ' + res.errors + ' erreurs' : '');
         btn.textContent = orig;
@@ -162,6 +169,12 @@
         btn.textContent = orig;
         btn.disabled = false;
       });
+  }
+  document.getElementById('purge-trades-btn').addEventListener('click', function() {
+    doPurge('trades', 'TOUS les trades BTC StackinSat', this);
+  });
+  document.getElementById('purge-txn-btn').addEventListener('click', function() {
+    doPurge('transactions', 'TOUTES les transactions BTC StackinSat', this);
   });
 
   // ── Import réel ───────────────────────────────────────────────
@@ -279,9 +292,12 @@
     var skipNote = job.skipped > 0 ? ' <span style="font-size:0.85rem;font-weight:400;color:#64748b">(' + job.skipped + ' déjà présents)</span>' : '';
     var title = 'Résultat — ' + job.ok + ' importés, ' + job.errors + ' erreurs' + skipNote;
 
-    var tableHtml = '<table><thead><tr><th>Date</th><th>Ticker</th><th>Montant</th><th>Libellé</th><th>Statut</th></tr></thead><tbody>';
+    var tableHtml = '<table><thead><tr><th>Date</th><th>Type</th><th>Montant</th><th>Libellé</th><th>Statut</th></tr></thead><tbody>';
     (job.rows || []).forEach(function(r) {
-      var amtStr = (Math.round(r.amount * 100) / 100) + '€';
+      var amtStr = (Math.round(r.amount * 10000) / 10000) + '€';
+      var typeBadge = r.kind === 'trade'
+        ? '<span class="badge badge-yellow">Trade</span>'
+        : '<span class="badge badge-red">Frais</span>';
       var statusBadge = r.status === 'ok'
         ? '<span class="badge badge-green">✓</span>'
         : r.status === 'exists'
@@ -289,7 +305,7 @@
           : '<span class="badge badge-red" title="' + escHtml(r.error || '') + '">✗ ' + escHtml((r.error || '').substring(0, 40)) + '</span>';
       tableHtml += '<tr>' +
         '<td style="color:#94a3b8;white-space:nowrap">' + escHtml(r.date) + '</td>' +
-        '<td><span class="badge badge-yellow">BTC-USD</span></td>' +
+        '<td>' + typeBadge + '</td>' +
         '<td style="color:#f87171;white-space:nowrap">' + amtStr + '</td>' +
         '<td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escHtml(r.name) + '</td>' +
         '<td>' + statusBadge + '</td>' +

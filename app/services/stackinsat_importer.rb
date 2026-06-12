@@ -14,6 +14,7 @@ class StackinsatImporter
     @dry_run     = dry_run
     @from_date   = from_date.is_a?(String) && !from_date.empty? ? Date.parse(from_date) : from_date
     @first_trade = true
+    @first_txn   = true
     @account_id  = Settings::SURE_ACCOUNT_BTC
     raise 'SURE_ACCOUNT_BTC non configuré — ajoutez-le dans .env' if @account_id.to_s.empty?
 
@@ -28,17 +29,17 @@ class StackinsatImporter
     all_items = []
 
     csv_rows.each do |r|
-      item = map_row(r)
-      all_items << item if item
+      map_row(r).each { |item| all_items << item }
     end
 
     all_items.select! { |t| Date.parse(t[:date]) >= @from_date } if @from_date
 
+    # Filtre date cutoff pour les trades uniquement (les transactions utilisent external_id)
     trade_cutoff = @dry_run ? nil : fetch_latest_trade_date
     if trade_cutoff
-      before = all_items.size
-      all_items.reject! { |t| Date.parse(t[:date]) <= trade_cutoff }
-      after = all_items.size
+      before = all_items.count { |t| t[:kind] == :trade }
+      all_items.reject! { |t| t[:kind] == :trade && Date.parse(t[:date]) <= trade_cutoff }
+      after = all_items.count { |t| t[:kind] == :trade }
       $stdout.puts "[StackinsatImporter] Dernier trade : #{trade_cutoff} — #{before - after} ignorés, #{after} nouveaux"
       $stdout.flush
     end
@@ -60,7 +61,7 @@ class StackinsatImporter
       if @dry_run
         row.status = 'preview'
       else
-        code, body = push_trade(t)
+        code, body = push(t)
         case code
         when 201 then row.status = 'ok';     ok      += 1
         when 200 then row.status = 'exists'; skipped += 1
@@ -117,23 +118,65 @@ class StackinsatImporter
     { deleted: deleted, errors: errors, message: e.message }
   end
 
+  def purge_transactions!
+    deleted = 0
+    errors  = 0
+    page    = 1
+    loop do
+      resp = @client.get('/api/v1/transactions') do |req|
+        req.headers['X-Api-Key'] = Settings::SURE_API_KEY
+        req.headers['Accept']    = 'application/json'
+        req.params['account_id'] = @account_id
+        req.params['per_page']   = 100
+        req.params['page']       = page
+      end
+      break unless resp.status == 200
+
+      body  = JSON.parse(resp.body)
+      items = body.is_a?(Array) ? body : (body['transactions'] || body['data'] || [])
+      break if items.empty?
+
+      items.each do |t|
+        id = t['id']
+        next unless id
+        del = @client.delete("/api/v1/transactions/#{id}") do |req|
+          req.headers['X-Api-Key'] = Settings::SURE_API_KEY
+          req.headers['Accept']    = 'application/json'
+        end
+        del.status == 200 ? deleted += 1 : errors += 1
+        sleep 0.03
+      end
+
+      break if items.size < 100
+      page += 1
+    end
+    { deleted: deleted, errors: errors }
+  rescue => e
+    { deleted: deleted, errors: errors, message: e.message }
+  end
+
   private
 
   def map_row(r)
-    return nil unless r['transactionType'].to_s == 'DELIVERY_PERSONAL_VAULT'
+    return [] unless r['transactionType'].to_s == 'DELIVERY_PERSONAL_VAULT'
 
     date       = r['deliveryDate'].to_s.split('T').first
     amount_btc = r['amountBtc'].to_f
     price      = r['price'].to_f
+    tx_id      = r['txId'].to_s.strip
     discounted = r['discountedFeesAmountEur'].to_f
     fee_eur    = discounted > 0 ? discounted : r['stackinsatBaseFeesAmountEur'].to_f
+    card_fee   = r['cardPaymentFeesAmountEur'].to_f
+    mining_btc = r['miningFeesBtc'].to_f
 
-    return nil if amount_btc <= 0 || price <= 0
+    return [] if amount_btc <= 0 || price <= 0
 
-    {
+    base  = { account_id: @account_id, date: date }
+    items = []
+
+    # Trade BUY — fee = spread StackinSat (intégré dans le prix de revient)
+    items << base.merge(
       kind:           :trade,
-      account_id:     @account_id,
-      date:           date,
       trade_type:     'buy',
       ticker:         TICKER,
       qty:            amount_btc.round(8),
@@ -143,7 +186,40 @@ class StackinsatImporter
       name:           'Achat BTC StackinSat',
       tag:            'Trade',
       display_amount: -(amount_btc * price).round(2)
-    }
+    )
+
+    # Frais paiement carte (uniquement pour les achats par carte)
+    if card_fee > 0
+      items << base.merge(
+        kind:           :transaction,
+        external_id:    "#{tx_id}_cf",
+        amount:         card_fee.round(2),
+        name:           'Frais paiement carte — StackinSat',
+        notes:          nil,
+        tag:            'Frais',
+        display_amount: card_fee.round(2)
+      )
+    end
+
+    # Frais de minage (en EUR au prix du BTC au moment de l'achat)
+    if mining_btc > 0
+      mining_eur = (mining_btc * price).round(4)
+      items << base.merge(
+        kind:           :transaction,
+        external_id:    "#{tx_id}_mf",
+        amount:         mining_eur,
+        name:           'Frais de minage — StackinSat',
+        notes:          "#{mining_btc} BTC",
+        tag:            'Frais',
+        display_amount: mining_eur
+      ) if mining_eur > 0
+    end
+
+    items
+  end
+
+  def push(t)
+    t[:kind] == :trade ? push_trade(t) : push_transaction(t)
   end
 
   def fetch_latest_trade_date
@@ -215,6 +291,44 @@ class StackinsatImporter
     [resp.status, parsed]
   rescue => e
     $stdout.puts "[StackinsatImporter] TRADE EXCEPTION: #{e.message}"; $stdout.flush
+    [0, e.message]
+  end
+
+  def push_transaction(t)
+    payload = {
+      transaction: {
+        account_id:  t[:account_id],
+        date:        t[:date],
+        amount:      -t[:amount],
+        name:        t[:name],
+        notes:       t[:notes],
+        external_id: t[:external_id],
+        source:      'stackinsat'
+      }
+    }
+
+    if @first_txn
+      @first_txn = false
+      $stdout.puts "[StackinsatImporter] Première TRANSACTION → POST #{Settings::SURE_API_URL}/api/v1/transactions"
+      $stdout.puts "[StackinsatImporter] Payload: #{payload.to_json}"
+      $stdout.flush
+    end
+
+    resp = @client.post('/api/v1/transactions') do |req|
+      req.headers['X-Api-Key']    = Settings::SURE_API_KEY
+      req.headers['Content-Type'] = 'application/json'
+      req.headers['Accept']       = 'application/json'
+      req.body = payload.to_json
+    end
+
+    parsed = begin; JSON.parse(resp.body); rescue; resp.body; end
+    unless [200, 201].include?(resp.status)
+      $stdout.puts "[StackinsatImporter] TXN ERREUR #{resp.status} — #{t[:name]} — #{resp.body[0..300]}"
+      $stdout.flush
+    end
+    [resp.status, parsed]
+  rescue => e
+    $stdout.puts "[StackinsatImporter] TXN EXCEPTION: #{e.message}"; $stdout.flush
     [0, e.message]
   end
 end

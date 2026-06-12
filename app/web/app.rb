@@ -297,7 +297,8 @@ class MarketwatchApp < Sinatra::Base
     if source == 'stackinsat'
       require_relative '../../app/services/stackinsat_importer'
       importer = StackinsatImporter.new(dry_run: false)
-      result[:trades] = importer.purge_trades! if %w[trades all].include?(what)
+      result[:trades]       = importer.purge_trades!       if %w[trades all].include?(what)
+      result[:transactions] = importer.purge_transactions! if %w[transactions all].include?(what)
     else
       require_relative '../../app/services/tr_importer'
       importer = TrImporter.new(dry_run: false)
