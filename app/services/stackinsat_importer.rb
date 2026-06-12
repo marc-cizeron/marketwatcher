@@ -189,11 +189,12 @@ class StackinsatImporter
     )
 
     # Frais de service StackinSat (toujours présent — spread/commission)
+    # amount négatif → push envoie +fee → SUR = dépense (sortie d'argent)
     if fee_eur > 0
       items << base.merge(
         kind:           :transaction,
         external_id:    "#{tx_id}_sf",
-        amount:         fee_eur.round(2),
+        amount:         -fee_eur.round(2),
         name:           'Frais StackinSat',
         notes:          nil,
         tag:            'Frais',
@@ -206,7 +207,7 @@ class StackinsatImporter
       items << base.merge(
         kind:           :transaction,
         external_id:    "#{tx_id}_cf",
-        amount:         card_fee.round(2),
+        amount:         -card_fee.round(2),
         name:           'Frais paiement carte — StackinSat',
         notes:          nil,
         tag:            'Frais',
@@ -220,7 +221,7 @@ class StackinsatImporter
       items << base.merge(
         kind:           :transaction,
         external_id:    "#{tx_id}_mf",
-        amount:         mining_eur,
+        amount:         -mining_eur,
         name:           'Frais de minage — StackinSat',
         notes:          "#{mining_btc} BTC",
         tag:            'Frais',
