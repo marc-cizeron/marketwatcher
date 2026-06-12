@@ -1,0 +1,315 @@
+<h1>Import BTC — StackinSat</h1>
+
+<!-- ── Formulaire upload ───────────────────────────────────────── -->
+<div class="card" id="upload-card">
+  <h2>Importer un CSV StackinSat</h2>
+  <p style="color:#94a3b8;font-size:0.875rem;margin-bottom:1rem">
+    Exportez depuis StackinSat → <em>Historique → Exporter CSV</em>.
+    Chaque ligne génère un trade BUY <span class="badge badge-yellow" style="font-size:0.75rem">BTC-USD</span>
+    dans le compte configuré via <code style="background:#0f172a;padding:0.1rem 0.4rem;border-radius:0.25rem;font-size:0.8rem">SURE_ACCOUNT_BTC</code>.
+  </p>
+
+  <% if defined?(@error) && @error %>
+    <div style="background:#450a0a;border:1px solid #7f1d1d;border-radius:0.5rem;padding:0.75rem 1rem;margin-bottom:1rem;color:#f87171">
+      <%= @error %>
+    </div>
+  <% end %>
+
+  <form id="import-form" method="post" action="/import" enctype="multipart/form-data">
+    <input type="hidden" name="source" value="stackinsat">
+    <div class="grid grid-2" style="gap:1rem">
+      <div>
+        <label>Fichier CSV</label>
+        <input type="file" name="file" id="file-input" accept=".csv" required>
+      </div>
+      <div>
+        <label>Importer à partir du (optionnel)</label>
+        <input type="date" name="from_date" id="from-date" value="<%= params[:from_date] %>">
+      </div>
+    </div>
+
+    <div style="margin-top:1rem;display:flex;gap:1rem;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-primary" type="submit" name="dry_run" value="true">
+        Aperçu (dry-run)
+      </button>
+      <button class="btn" style="background:#065f46;color:#6ee7b7" type="button" id="import-btn">
+        Importer réellement
+      </button>
+      <span style="color:#64748b;font-size:0.8rem">L'aperçu ne fait rien — il simule le résultat.</span>
+    </div>
+  </form>
+
+  <!-- Zone purge -->
+  <div style="margin-top:1.5rem;padding-top:1rem;border-top:1px solid #334155">
+    <div style="font-size:0.8rem;color:#64748b;margin-bottom:0.75rem">
+      Données existantes dans SUR — à utiliser si un import précédent avait des erreurs
+    </div>
+    <div style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:center">
+      <button class="btn btn-sm" style="background:#422006;color:#fed7aa" type="button"
+              id="purge-trades-btn">🗑 Supprimer les trades BTC</button>
+      <span id="purge-status" style="font-size:0.8rem;color:#64748b"></span>
+    </div>
+  </div>
+</div>
+
+<!-- ── Progress bar (import réel) ─────────────────────────────── -->
+<div class="card" id="progress-card" style="display:none">
+  <h2>Import en cours…</h2>
+
+  <div style="margin:1.5rem 0">
+    <div style="display:flex;justify-content:space-between;margin-bottom:0.5rem">
+      <span id="progress-label" style="font-size:0.875rem;color:#94a3b8">Démarrage…</span>
+      <span id="progress-pct" style="font-size:0.875rem;font-weight:600;color:#38bdf8">0%</span>
+    </div>
+    <div style="background:#1e293b;border-radius:9999px;height:10px;overflow:hidden">
+      <div id="progress-bar" style="background:#f59e0b;height:100%;width:0%;transition:width 0.3s ease;border-radius:9999px"></div>
+    </div>
+    <div style="display:flex;gap:2rem;margin-top:1rem">
+      <div class="stat">
+        <div class="stat-value" id="p-ok" style="color:#4ade80">0</div>
+        <div class="stat-label">Importés</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="p-errors" style="color:#f87171">0</div>
+        <div class="stat-label">Erreurs</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="p-skip" style="color:#64748b">0</div>
+        <div class="stat-label">Déjà présents</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="p-total" style="color:#94a3b8">—</div>
+        <div class="stat-label">Total</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Résultats (dry-run server-side OU import JS) ───────────── -->
+<div id="results-section">
+<% if @result %>
+  <% rows = @result.rows %>
+
+  <div class="card">
+    <h2 style="margin-bottom:1rem">
+      Aperçu — <%= rows.size %> trades BTC
+      <% if @result.skipped > 0 %>
+        <span style="font-size:0.85rem;font-weight:400;color:#64748b;margin-left:0.5rem">
+          (<%= @result.skipped %> déjà importés, ignorés)
+        </span>
+      <% end %>
+    </h2>
+
+    <table>
+      <thead><tr><th>Date</th><th>BTC reçu</th><th>Prix (€/BTC)</th><th>Montant</th><th>Libellé</th></tr></thead>
+      <tbody>
+        <% rows.each do |row| %>
+          <tr>
+            <td style="color:#94a3b8;white-space:nowrap"><%= row.date %></td>
+            <td><span class="badge badge-yellow">BTC-USD</span></td>
+            <td style="color:#94a3b8"></td>
+            <td class="negative" style="white-space:nowrap"><%= row.amount&.round(2) %>€</td>
+            <td style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><%= row.name %></td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  </div>
+
+  <% if rows.size > 0 %>
+    <div class="card" style="border-color:#0369a1">
+      <h2>Confirmer l'import</h2>
+      <p style="color:#94a3b8;font-size:0.875rem;margin-bottom:1rem">
+        <%= rows.size %> trades BTC seront envoyés vers SUR. Import idempotent par date — les trades déjà présents sont ignorés.
+      </p>
+      <form id="confirm-form" method="post" action="/import" enctype="multipart/form-data">
+        <input type="hidden" name="from_date" value="<%= params[:from_date] %>">
+        <input type="hidden" name="source" value="stackinsat">
+        <label>Re-sélectionnez le fichier CSV</label>
+        <input type="file" name="file" id="confirm-file" accept=".csv" required style="margin-bottom:1rem">
+        <button class="btn" style="background:#065f46;color:#6ee7b7" type="button" id="confirm-btn">
+          Confirmer l'import (<%= rows.size %> trades)
+        </button>
+      </form>
+    </div>
+  <% end %>
+<% end %>
+</div>
+
+<!-- ── Scripts ────────────────────────────────────────────────── -->
+<script>
+(function() {
+  // ── Purge ─────────────────────────────────────────────────────
+  document.getElementById('purge-trades-btn').addEventListener('click', function() {
+    var btn = this;
+    if (!confirm('Supprimer TOUS les trades BTC StackinSat dans SUR ?\nCette action est irréversible.')) return;
+    btn.disabled = true;
+    var orig = btn.textContent;
+    btn.textContent = '⏳ Suppression…';
+    document.getElementById('purge-status').textContent = '';
+    var body = new URLSearchParams({ what: 'trades', source: 'stackinsat' });
+    fetch('/import/purge', { method: 'POST', body: body })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        var res = d.trades || d;
+        document.getElementById('purge-status').textContent =
+          '✓ ' + (res.deleted || 0) + ' supprimés' + (res.errors > 0 ? ', ' + res.errors + ' erreurs' : '');
+        btn.textContent = orig;
+        btn.disabled = false;
+      })
+      .catch(function(e) {
+        document.getElementById('purge-status').textContent = 'Erreur: ' + e.message;
+        btn.textContent = orig;
+        btn.disabled = false;
+      });
+  });
+
+  // ── Import réel ───────────────────────────────────────────────
+  function startImport(fileInput, fromDate) {
+    if (!fileInput || !fileInput.files[0]) {
+      alert('Sélectionnez un fichier CSV');
+      return;
+    }
+    var formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+    formData.append('dry_run', 'false');
+    formData.append('from_date', fromDate || '');
+    formData.append('source', 'stackinsat');
+
+    document.getElementById('upload-card').style.display = 'none';
+    document.getElementById('results-section').innerHTML = '';
+    document.getElementById('progress-card').style.display = 'block';
+
+    fetch('/import', { method: 'POST', body: formData })
+      .then(function(r) {
+        if (!r.ok) return r.json().then(function(d) { throw new Error(d.error || 'Erreur serveur'); });
+        return r.json();
+      })
+      .then(function(data) {
+        if (data.job_id) {
+          pollJob(data.job_id);
+        } else {
+          showFatalError(data.error || 'Réponse inattendue');
+        }
+      })
+      .catch(function(e) { showFatalError(e.message); });
+  }
+
+  document.getElementById('import-btn').addEventListener('click', function() {
+    startImport(
+      document.getElementById('file-input'),
+      document.getElementById('from-date').value
+    );
+  });
+
+  var confirmBtn = document.getElementById('confirm-btn');
+  if (confirmBtn) {
+    confirmBtn.addEventListener('click', function() {
+      startImport(
+        document.getElementById('confirm-file'),
+        '<%= params[:from_date] %>'
+      );
+    });
+  }
+
+  // ── Polling ──────────────────────────────────────────────────
+  function pollJob(jobId) {
+    var interval = setInterval(function() {
+      fetch('/import/status/' + jobId)
+        .then(function(r) { return r.json(); })
+        .then(function(job) {
+          updateProgress(job);
+          if (job.status === 'done' || job.status === 'error') {
+            clearInterval(interval);
+            showResult(job);
+          }
+        })
+        .catch(function() { /* ignore */ });
+    }, 400);
+  }
+
+  function updateProgress(job) {
+    var total = job.total || 0;
+    var prog  = job.progress || 0;
+    var pct   = total > 0 ? Math.round((prog / total) * 100) : 0;
+
+    document.getElementById('progress-bar').style.width = pct + '%';
+    document.getElementById('progress-pct').textContent = pct + '%';
+    document.getElementById('p-ok').textContent     = job.ok     || 0;
+    document.getElementById('p-errors').textContent = job.errors || 0;
+    document.getElementById('p-skip').textContent   = job.skipped || 0;
+    document.getElementById('p-total').textContent  = total || '—';
+
+    var label = '';
+    if (job.phase === 'démarrage')      label = 'Vérification des doublons…';
+    else if (job.phase === 'import')    label = prog + ' / ' + total + ' trades traités';
+    else if (job.phase === 'terminé')   label = 'Import terminé';
+    else if (job.phase === 'erreur')    label = 'Erreur';
+    document.getElementById('progress-label').textContent = label;
+  }
+
+  function showResult(job) {
+    document.getElementById('progress-card').style.display = 'none';
+    var html = '';
+
+    if (job.status === 'error') {
+      html = '<div class="card" style="border-color:#7f1d1d"><h2 style="color:#f87171">Erreur d\'import</h2><p style="color:#94a3b8;margin-top:0.5rem">' + escHtml(job.message) + '</p></div>';
+      document.getElementById('results-section').innerHTML = html;
+      document.getElementById('upload-card').style.display = 'block';
+      return;
+    }
+
+    var cutoffHtml = '';
+    if (job.trade_cutoff) {
+      cutoffHtml = '<div style="background:#0c4a6e;border:1px solid #0369a1;border-radius:0.5rem;padding:0.6rem 1rem;margin-bottom:1rem;font-size:0.85rem;color:#38bdf8">' +
+        '📅 Trades filtrés à partir du <strong>' + job.trade_cutoff + '</strong> (date du dernier trade BTC dans SUR)' +
+        '</div>';
+    }
+
+    var errorsHtml = '';
+    if (job.sample_errors && job.sample_errors.length > 0) {
+      errorsHtml = '<div style="background:#450a0a;border:1px solid #7f1d1d;border-radius:0.5rem;padding:1rem;margin-bottom:1rem">' +
+        '<div style="color:#f87171;font-weight:600;margin-bottom:0.5rem">Erreurs (' + job.errors + ' au total) :</div>';
+      job.sample_errors.forEach(function(e) {
+        errorsHtml += '<div style="font-size:0.8rem;color:#fca5a5;margin-bottom:0.25rem"><strong>' + escHtml(e.name) + '</strong> → ' + escHtml(e.error) + '</div>';
+      });
+      errorsHtml += '</div>';
+    }
+
+    var skipNote = job.skipped > 0 ? ' <span style="font-size:0.85rem;font-weight:400;color:#64748b">(' + job.skipped + ' déjà présents)</span>' : '';
+    var title = 'Résultat — ' + job.ok + ' importés, ' + job.errors + ' erreurs' + skipNote;
+
+    var tableHtml = '<table><thead><tr><th>Date</th><th>Ticker</th><th>Montant</th><th>Libellé</th><th>Statut</th></tr></thead><tbody>';
+    (job.rows || []).forEach(function(r) {
+      var amtStr = (Math.round(r.amount * 100) / 100) + '€';
+      var statusBadge = r.status === 'ok'
+        ? '<span class="badge badge-green">✓</span>'
+        : r.status === 'exists'
+          ? '<span class="badge badge-gray">déjà présent</span>'
+          : '<span class="badge badge-red" title="' + escHtml(r.error || '') + '">✗ ' + escHtml((r.error || '').substring(0, 40)) + '</span>';
+      tableHtml += '<tr>' +
+        '<td style="color:#94a3b8;white-space:nowrap">' + escHtml(r.date) + '</td>' +
+        '<td><span class="badge badge-yellow">BTC-USD</span></td>' +
+        '<td style="color:#f87171;white-space:nowrap">' + amtStr + '</td>' +
+        '<td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escHtml(r.name) + '</td>' +
+        '<td>' + statusBadge + '</td>' +
+        '</tr>';
+    });
+    tableHtml += '</tbody></table>';
+
+    html = '<div class="card"><h2 style="margin-bottom:1rem">' + title + '</h2>' + cutoffHtml + errorsHtml + tableHtml + '</div>';
+    document.getElementById('results-section').innerHTML = html;
+  }
+
+  function showFatalError(msg) {
+    document.getElementById('progress-card').style.display = 'none';
+    document.getElementById('upload-card').style.display = 'block';
+    document.getElementById('results-section').innerHTML =
+      '<div class="card" style="border-color:#7f1d1d"><p style="color:#f87171">' + escHtml(msg) + '</p></div>';
+  }
+
+  function escHtml(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+})();
+</script>

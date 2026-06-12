@@ -14,6 +14,7 @@ module Settings
   SURE_API_KEY          = ENV.fetch('SURE_API_KEY', '') unless defined?(SURE_API_KEY)
   SURE_ACCOUNT_DEFAULT  = ENV.fetch('SURE_ACCOUNT_DEFAULT', '8051eea7-4b79-4116-ba1e-94dede17c60a') unless defined?(SURE_ACCOUNT_DEFAULT)
   SURE_ACCOUNT_PEA      = ENV.fetch('SURE_ACCOUNT_PEA',     '8379b33a-47b0-4c61-a178-38d5910d916e') unless defined?(SURE_ACCOUNT_PEA)
+  SURE_ACCOUNT_BTC      = ENV.fetch('SURE_ACCOUNT_BTC',     '')                                      unless defined?(SURE_ACCOUNT_BTC)
 
   SMTP_HOST         = ENV.fetch('SMTP_HOST', '') unless defined?(SMTP_HOST)
   SMTP_PORT         = ENV.fetch('SMTP_PORT', '587').to_i unless defined?(SMTP_PORT)

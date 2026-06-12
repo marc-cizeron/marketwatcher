@@ -227,7 +227,7 @@
     var orig = btn.textContent;
     btn.textContent = '⏳ Suppression…';
     document.getElementById('purge-status').textContent = '';
-    var body = new URLSearchParams({ what: what });
+    var body = new URLSearchParams({ what: what, source: 'tr' });
     fetch('/import/purge', { method: 'POST', body: body })
       .then(function(r) { return r.json(); })
       .then(function(d) {
@@ -243,12 +243,10 @@
         btn.disabled = false;
       });
   }
-  var ptBtn   = document.getElementById('purge-txn-btn');
-  var ptrdBtn = document.getElementById('purge-trades-btn');
-  if (ptBtn)   ptBtn.addEventListener('click',   function() { doPurge('transactions', ptBtn); });
-  if (ptrdBtn) ptrdBtn.addEventListener('click', function() { doPurge('trades', ptrdBtn); });
+  document.getElementById('purge-txn-btn').addEventListener('click',   function() { doPurge('transactions', this); });
+  document.getElementById('purge-trades-btn').addEventListener('click', function() { doPurge('trades', this); });
 
-  // ── Import réel (bouton principal) ───────────────────────────
+  // ── Import réel ───────────────────────────────────────────────
   function startImport(fileInput, fromDate) {
     if (!fileInput || !fileInput.files[0]) {
       alert('Sélectionnez un fichier CSV');
@@ -343,7 +341,6 @@
       return;
     }
 
-    // Stats par tag
     var byTag = {};
     (job.rows || []).forEach(function(r) {
       if (!byTag[r.tag]) byTag[r.tag] = { count: 0, total: 0 };
@@ -364,7 +361,6 @@
     });
     statsHtml += '</div>';
 
-    // Erreurs sample
     var errorsHtml = '';
     if (job.sample_errors && job.sample_errors.length > 0) {
       errorsHtml = '<div style="background:#450a0a;border:1px solid #7f1d1d;border-radius:0.5rem;padding:1rem;margin-bottom:1rem">' +
@@ -375,7 +371,6 @@
       errorsHtml += '</div>';
     }
 
-    // Cutoff trades
     var cutoffHtml = '';
     if (job.trade_cutoff) {
       cutoffHtml = '<div style="background:#0c4a6e;border:1px solid #0369a1;border-radius:0.5rem;padding:0.6rem 1rem;margin-bottom:1rem;font-size:0.85rem;color:#38bdf8">' +
@@ -383,19 +378,17 @@
         '</div>';
     }
 
-    // Titre
     var skipNote = job.skipped > 0 ? ' <span style="font-size:0.85rem;font-weight:400;color:#64748b">(' + job.skipped + ' transactions déjà présentes)</span>' : '';
     var title = 'Résultat — ' + job.ok + ' importées, ' + job.errors + ' erreurs' + skipNote;
 
-    // Table
     var tableHtml = '<table><thead><tr><th>Date</th><th>Compte</th><th>Montant</th><th>Catégorie</th><th>Libellé</th><th>Statut</th></tr></thead><tbody>';
     (job.rows || []).forEach(function(r) {
       var amtColor = r.amount >= 0 ? '#4ade80' : '#f87171';
       var amtStr   = (r.amount >= 0 ? '+' : '') + (Math.round(r.amount * 100) / 100) + '€';
       var accBadge = r.account === 'PEA'
         ? '<span class="badge badge-blue">PEA</span>'
-        : '<span class="badge badge-gray">DEFAULT</span>';
-      var tagColor = {Investissement:'badge-blue', Dividende:'badge-green', Dépôt:'badge-green', Taxes:'badge-red', 'Frais de courtage':'badge-red', Frais:'badge-red', Retrait:'badge-yellow'}[r.tag] || 'badge-gray';
+        : '<span class="badge badge-gray">' + escHtml(r.account) + '</span>';
+      var tagColor = {Trade:'badge-blue', Dividende:'badge-green', Dépôt:'badge-green', Taxes:'badge-red', 'Frais de courtage':'badge-red', Frais:'badge-red', Retrait:'badge-yellow'}[r.tag] || 'badge-gray';
       var statusBadge = r.status === 'ok'
         ? '<span class="badge badge-green">✓</span>'
         : '<span class="badge badge-red" title="' + escHtml(r.error || '') + '">✗ ' + escHtml((r.error || '').substring(0, 40)) + '</span>';
@@ -447,7 +440,6 @@
             row.style.textDecoration = 'line-through';
             btn.textContent = '✓ Sauvegardé';
             input.disabled = true;
-            // Si plus aucune ligne active, masquer la card
             var remaining = document.querySelectorAll('.save-ticker-btn:not([disabled])');
             if (remaining.length === 0) {
               document.getElementById('unmapped-card').style.borderColor = '#16a34a';
@@ -465,7 +457,6 @@
     });
   });
 
-  // Entrée clavier sur le champ ticker → déclenche save
   document.querySelectorAll('input[data-isin]').forEach(function(input) {
     input.addEventListener('keydown', function(e) {
       if (e.key === 'Enter') {

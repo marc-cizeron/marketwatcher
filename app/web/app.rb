@@ -179,6 +179,11 @@ class MarketwatchApp < Sinatra::Base
     erb :import
   end
 
+  get '/import/btc' do
+    @result = nil
+    erb :import_btc
+  end
+
   # Dry-run : réponse synchrone (rapide, pas d'appel SUR)
   # Import réel : démarre un job en arrière-plan, retourne un job_id JSON
   post '/import' do
@@ -191,9 +196,15 @@ class MarketwatchApp < Sinatra::Base
     csv_content = params[:file][:tempfile].read.force_encoding('UTF-8')
     dry_run     = params[:dry_run] != 'false'
     from_date   = params[:from_date].to_s.strip
+    source      = params[:source].to_s
 
-    require_relative '../../app/services/tr_importer'
-    importer = TrImporter.new(dry_run: dry_run, from_date: from_date.empty? ? nil : from_date)
+    if source == 'stackinsat'
+      require_relative '../../app/services/stackinsat_importer'
+      importer = StackinsatImporter.new(dry_run: dry_run, from_date: from_date.empty? ? nil : from_date)
+    else
+      require_relative '../../app/services/tr_importer'
+      importer = TrImporter.new(dry_run: dry_run, from_date: from_date.empty? ? nil : from_date)
+    end
 
     if dry_run
       @result  = importer.import!(csv_content)
@@ -276,15 +287,24 @@ class MarketwatchApp < Sinatra::Base
     job.to_json
   end
 
-  # Purge toutes les transactions/trades SUR des comptes TR
+  # Purge transactions/trades SUR — source: tr (défaut) ou stackinsat
   post '/import/purge' do
     content_type :json
-    what = params[:what].to_s
-    require_relative '../../app/services/tr_importer'
-    importer = TrImporter.new(dry_run: false)
-    result   = {}
-    result[:transactions] = importer.purge_transactions! if %w[transactions all].include?(what)
-    result[:trades]       = importer.purge_trades!       if %w[trades all].include?(what)
+    what   = params[:what].to_s
+    source = params[:source].to_s
+    result = {}
+
+    if source == 'stackinsat'
+      require_relative '../../app/services/stackinsat_importer'
+      importer = StackinsatImporter.new(dry_run: false)
+      result[:trades] = importer.purge_trades! if %w[trades all].include?(what)
+    else
+      require_relative '../../app/services/tr_importer'
+      importer = TrImporter.new(dry_run: false)
+      result[:transactions] = importer.purge_transactions! if %w[transactions all].include?(what)
+      result[:trades]       = importer.purge_trades!       if %w[trades all].include?(what)
+    end
+
     result.to_json
   rescue => e
     $stderr.puts "[purge] #{e.class}: #{e.message}\n#{e.backtrace.first(5).join("\n")}"
