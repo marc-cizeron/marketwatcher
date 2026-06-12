@@ -63,8 +63,6 @@ class TrImporter
 
   SKIP_TYPES = %w[
     MIGRATION
-    BONUS_ISSUE
-    BONUS_ISSUE_CANCELLED
     WORTHLESS
     WORTHLESS_CANCELLED
     INTERMEDIATE_SECURITIES_DISTRIBUTION
@@ -349,6 +347,31 @@ class TrImporter
       )
 
     # ── Frais carte ─────────────────────────────────────────────────────────
+    # ── Attribution gratuite / annulation (ex. BYD bonus issue) ────────────
+    # Le titre en TR n'a pas de prix (actions gratuites). On utilise un prix
+    # symbolique de 0.001€ pour satisfaire la validation SUR (price > 0).
+    # L'impact sur le prix de revient est négligeable.
+    when 'BONUS_ISSUE', 'BONUS_ISSUE_CANCELLED'
+      ticker = @ticker_map[symbol]
+      return [{ kind: :unmapped, isin: symbol, name: name_asset }] if ticker.nil? && !@ticker_map.key?(symbol)
+      return [] if ticker.nil?
+      return [] if shares == 0
+
+      trade_type = shares > 0 ? 'buy' : 'sell'
+      label      = shares > 0 ? "Attribution gratuite #{name_asset}" : "Annulation attribution #{name_asset}"
+      items << base.merge(
+        kind:           :trade,
+        trade_type:     trade_type,
+        ticker:         ticker,
+        qty:            shares.abs.round(8),
+        price:          0.001,
+        fee:            0,
+        currency:       'EUR',
+        name:           label,
+        tag:            'Trade',
+        display_amount: 0
+      )
+
     when 'CARD_ORDERING_FEE'
       items << base.merge(
         kind:           :transaction,
