@@ -20,7 +20,7 @@ x-env: &env
   NOTIFY_EMAIL: ${NOTIFY_EMAIL:-}
   PERMITTED_HOSTS: ${PERMITTED_HOSTS:-marketwatcher.cizeron.me}
   PORT: "4567"
-  DATABASE_PATH: db/marketwatch.db
+  DATABASE_PATH: db/data/marketwatch.db
 
 services:
   app:
@@ -31,7 +31,7 @@ services:
     environment:
       <<: *env
     volumes:
-      - marketwatch_db:/app/db
+      - marketwatch_db:/app/db/data
     restart: unless-stopped
 
   clock:
@@ -41,7 +41,7 @@ services:
     environment:
       <<: *env
     volumes:
-      - marketwatch_db:/app/db
+      - marketwatch_db:/app/db/data
     restart: unless-stopped
     depends_on:
       - app

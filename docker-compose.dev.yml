@@ -19,10 +19,10 @@ services:
       - SURE_ACCOUNT_PEA=${SURE_ACCOUNT_PEA:-8379b33a-47b0-4c61-a178-38d5910d916e}
       - PERMITTED_HOSTS=${PERMITTED_HOSTS:-localhost,127.0.0.1}
       - PORT=4567
-      - DATABASE_PATH=db/marketwatch.db
+      - DATABASE_PATH=db/data/marketwatch.db
     volumes:
-      - .:/app                      # source live-reload
-      - marketwatch_db:/app/db      # SQLite persist
+      - .:/app                           # source live-reload
+      - marketwatch_db:/app/db/data      # SQLite persist (sous-dossier pour ne pas masquer db/migrations)
     restart: unless-stopped
 
 volumes:
