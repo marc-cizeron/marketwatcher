@@ -10,7 +10,8 @@ Sequel.extension :migration
 begin
   Sequel::Migrator.run(DB, File.join(File.dirname(__FILE__), 'db/migrations'))
 rescue => e
-  warn "Migration warning: #{e.message}"
+  warn "Migration error: #{e.message}"
+  raise
 end
 
 require_relative 'app/models/analysis'
