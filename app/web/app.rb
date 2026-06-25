@@ -318,6 +318,32 @@ class MarketwatchApp < Sinatra::Base
     { error: e.message }.to_json
   end
 
+  # Autocomplete ticker — recherche Yahoo Finance par nom/symbole
+  get '/import/tickers/search' do
+    content_type :json
+    query = params[:q].to_s.strip
+    halt 200, [].to_json if query.length < 2
+
+    require 'faraday'
+    client = Faraday.new(url: 'https://query1.finance.yahoo.com') do |f|
+      f.options.timeout = 5; f.options.open_timeout = 3
+    end
+    resp = client.get('/v1/finance/search') do |req|
+      req.params['q']           = query
+      req.params['quotesCount'] = 8
+      req.params['newsCount']   = 0
+      req.headers['User-Agent'] = 'Mozilla/5.0'
+    end
+    quotes = JSON.parse(resp.body)['quotes'] || []
+    quotes.filter_map { |q|
+      next unless q['symbol']
+      { symbol: q['symbol'], name: q['shortname'] || q['longname'] || q['symbol'], exchange: q['exchDisp'] }
+    }.to_json
+  rescue => e
+    $stderr.puts "[ticker search] #{e.class}: #{e.message}"
+    [].to_json
+  end
+
   # Sauvegarde d'une correspondance ISIN → ticker
   post '/import/tickers' do
     require_relative '../../app/models/ticker_mapping'
